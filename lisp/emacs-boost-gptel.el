@@ -1,6 +1,6 @@
-;;; emacs-leuven-gptel.el --- GPTel configuration  -*- lexical-binding: t; -*-
+;;; emacs-boost-gptel.el --- GPTel configuration  -*- lexical-binding: t; -*-
 
-;; This file is generated from emacs-leuven-gptel.txt.
+;; This file is generated from emacs-boost-gptel.txt.
 ;; Edit the Org source, then tangle it again.
 
 ;;; Code:
@@ -14,7 +14,7 @@
 (boost--try-require 'org)
 
 (unless (boost--try-require 'gptel)
-  (error "GPTel is required by emacs-leuven-gptel"))
+  (error "GPTel is required by emacs-boost-gptel"))
 
 (defgroup boost-gptel nil
   "Personal configuration layered on top of GPTel."
@@ -39,7 +39,7 @@
   :type 'file
   :group 'boost-gptel)
 
-(defcustom boost-gptel-tool-max-output-chars 50000
+(defcustom boost-gptel-tool-max-output-chars 120000
   "Maximum number of characters returned by a read tool."
   :type 'natnum
   :group 'boost-gptel)
@@ -166,11 +166,11 @@ second, redundant backend next to it."
                   boost-gptel-anthropic-model))
     (setq boost-gptel-anthropic-backend backend)))
 
-;; Default backend.
-(setq gptel-backend 'openai)
-
-;; Default OpenAI model.
-(setq gptel-openai-model "gpt-3.5-turbo")
+;; ;; Default backend.
+;; (setq gptel-backend 'openai)
+;;
+;; ;; Default OpenAI model.
+;; (setq gptel-openai-model "gpt-3.5-turbo")
 
 (defun boost-gptel-select-default-provider ()
   "Set the global GPTel backend and model from `boost-gptel-default-provider'."
@@ -674,24 +674,24 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (defvar boost-gptel-tool-search-project nil)
 (defvar boost-gptel-tool-create-note nil)
 
-(setq gptel-list-files
+(setq boost-gptel-tool-list-files
       (gptel-make-tool
-       :name "boost-gptel-list-files"
-       :function (lambda ()
-                   (mapconcat #'identity (boost-gptel--list-files) "\n"))
+       :name "list_files"
        :description
        "List files below the authorised root directory."
+       :function (lambda ()
+                   (mapconcat #'identity (boost-gptel--list-files) "\n"))
        :args nil
        :category "filesystem"
        :confirm nil
        :include t))
 
-(setq gptel-read-file
+(setq boost-gptel-tool-read-file
       (gptel-make-tool
-       :name "boost-gptel-read-file"
-       :function (lambda (path) (boost-gptel--read-file path))
+       :name "read_file"
        :description
        "Read a text file below the authorised root directory."
+       :function (lambda (path) (boost-gptel--read-file path))
        :args
        (list
         '(:name "path"
@@ -701,13 +701,13 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
        :confirm nil
        :include t))
 
-(setq gptel-write-file
+(setq boost-gptel-tool-write-file
       (gptel-make-tool
-       :name "boost-gptel-write-file"
-       :function (lambda (path content &optional backup)
-                   (boost-gptel--write-file path content backup))
+       :name "write_file"
        :description
        "Replace a text file below the authorised root directory."
+       :function (lambda (path content &optional backup)
+                   (boost-gptel--write-file path content backup))
        :args
        (list
         '(:name "path"
@@ -721,23 +721,23 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
         '(:name "backup"
           :type boolean
           :description
-          "Create a .bak copy before replacing an existing file (défaut: true)"
+          "Create a .bak copy before replacing an existing file (default: true)"
           :optional t))
        :category "filesystem"
        :confirm t
        :include t))
 
 (with-eval-after-load 'gptel
-  (add-to-list 'gptel-tools gptel-list-files)
-  (add-to-list 'gptel-tools gptel-read-file)
-  (add-to-list 'gptel-tools gptel-write-file))
+  (add-to-list 'gptel-tools boost-gptel-tool-list-files)
+  (add-to-list 'gptel-tools boost-gptel-tool-read-file)
+  (add-to-list 'gptel-tools boost-gptel-tool-write-file))
 
 (setq boost-gptel-tool-current-datetime
       (gptel-make-tool
        :name "current_datetime"
-       :function #'boost-gptel-tool-current-datetime
        :description
        "Return the current local date, time, weekday, and numeric time-zone offset."
+       :function #'boost-gptel-tool-current-datetime
        :args nil
        :category "environment"
        :confirm nil
@@ -746,9 +746,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (setq boost-gptel-tool-read-buffer
       (gptel-make-tool
        :name "read_buffer"
-       :function #'boost-gptel-tool-read-buffer
        :description
        "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
+       :function #'boost-gptel-tool-read-buffer
        :args
        (list
         '(:name "buffer_name"
@@ -761,9 +761,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (setq boost-gptel-tool-list-project-files
       (gptel-make-tool
        :name "list_project_files"
-       :function #'boost-gptel-tool-list-project-files
-       :description
+       :descriptiown
        "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
+       :function #'boost-gptel-tool-list-project-files
        :args
        (list
         '(:name "extension"
@@ -777,9 +777,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (setq boost-gptel-tool-read-project-file
       (gptel-make-tool
        :name "read_project_file"
-       :function #'boost-gptel-tool-read-project-file
        :description
        "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
+       :function #'boost-gptel-tool-read-project-file
        :args
        (list
         '(:name "relative_path"
@@ -792,9 +792,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (setq boost-gptel-tool-search-project
       (gptel-make-tool
        :name "search_project"
-       :function #'boost-gptel-tool-search-project
        :description
        "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
+       :function #'boost-gptel-tool-search-project
        :args
        (list
         '(:name "query"
@@ -807,9 +807,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (setq boost-gptel-tool-create-note
       (gptel-make-tool
        :name "create_note"
-       :function #'boost-gptel-tool-create-note
        :description
        "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
+       :function #'boost-gptel-tool-create-note
        :args
        (list
         '(:name "title"
@@ -1428,11 +1428,11 @@ Do nothing when the GPTel response belongs to another buffer."
         (region-end)
         (completing-read "Target language: "
                          boost-gptel-default-target-languages
-                         nil        ;; predicate
-                         nil        ;; require-match (nil = allow custom input)
-                         nil        ;; initial-input
-                         nil        ;; history
-                         "English")) ;; default
+                         nil        ;; Predicate.
+                         nil        ;; Require-match (nil = allow custom input).
+                         nil        ;; Initial-input.
+                         nil        ;; History.
+                         "English")) ;; Default.
      (user-error "Select a region first")))
   (let ((source
          (boost-gptel-buffer-substring-limited
@@ -1525,6 +1525,6 @@ Do nothing when the GPTel response belongs to another buffer."
 (when (locate-library "uuid")
   (boost--try-require 'gptel-proof))
 
-(provide 'emacs-leuven-gptel)
+(provide 'emacs-boost-gptel)
 
-;;; emacs-leuven-gptel.el ends here
+;;; emacs-boost-gptel.el ends here
