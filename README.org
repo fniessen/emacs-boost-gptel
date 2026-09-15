@@ -8,7 +8,7 @@
 #+LANGUAGE:  en
 #+STARTUP:   overview
 #+OPTIONS:   toc:3 num:t
-#+PROPERTY:  header-args:emacs-lisp :tangle lisp/emacs-leuven-gptel.el :mkdirp yes :results silent
+#+PROPERTY:  header-args:emacs-lisp :tangle lisp/emacs-boost-gptel.el :mkdirp yes :results silent
 
 Multiple Backends, Dynamic Discovery, Rewrite and Chat
 https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/
