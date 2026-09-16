@@ -45,12 +45,12 @@
   :group 'boost-gptel)
 
 (defcustom boost-gptel-tool-max-search-files 300
-  "Maximum number of project files inspected by search_project."
+  "Maximum number of project files inspected by search_project_files."
   :type 'natnum
   :group 'boost-gptel)
 
 (defcustom boost-gptel-tool-max-search-matches 80
-  "Maximum number of matches returned by search_project."
+  "Maximum number of matches returned by search_project_files."
   :type 'natnum
   :group 'boost-gptel)
 
@@ -304,7 +304,7 @@ second, redundant backend next to it."
 
 (defun boost-gptel--house-style-directive ()
   "Return the external house-style prompt or a safe built-in fallback."
-  (boost-gptel-read-prompt-file
+  (boost-gptel--read-prompt-file
    "house-style"
    boost-gptel-prompt-writing))
 
@@ -389,16 +389,43 @@ second, redundant backend next to it."
     (pp gptel-context)))
 
 (defvar boost-gptel-root (expand-file-name "~/")
-  "Authorized working directory for GPTel tools.")
+  "Authorised working directory for GPTel file tools.")
+
 (make-directory boost-gptel-root t)
 
 (defun boost-gptel--safe-path (path)
-  "Return a secure absolute path under boost-gptel-root, or signal an error."
-  (let* ((abs (expand-file-name path boost-gptel-root)))
-    (if (and (file-in-directory-p abs boost-gptel-root)
-             (not (file-directory-p abs)))
-        abs
-      (error "Forbidden path: %s" path))))
+  "Return an absolute non-directory PATH below `boost-gptel-root'.
+
+Signal an error when PATH is absolute, escapes the authorised root, resolves
+through an existing symbolic link outside that root, or names a directory."
+  (when (file-name-absolute-p path)
+    (user-error "Expected a path relative to the authorised root"))
+  (let* ((root
+          (file-name-as-directory
+           (file-truename boost-gptel-root)))
+         (expanded
+          (expand-file-name path root))
+         (existing-parent
+          (locate-dominating-file
+           expanded
+           (lambda (directory)
+             (file-exists-p directory))))
+         (checked
+          (if (file-exists-p expanded)
+              (file-truename expanded)
+            expanded)))
+    (unless (file-in-directory-p checked root)
+      (user-error "Path escapes the authorised root: %s" path))
+    (when (and existing-parent
+               (not (file-in-directory-p
+                     (file-truename existing-parent)
+                     root)))
+      (user-error "Path resolves outside the authorised root: %s" path))
+    (when (file-directory-p expanded)
+      (user-error "Expected a file path, not a directory: %s" path))
+    (when (boost-gptel--sensitive-file-p expanded)
+      (user-error "Refusing access to a sensitive path: %s" path))
+    expanded))
 
 (defun boost-gptel--project-root (&optional directory)
   "Return the current project root for DIRECTORY, or nil."
@@ -510,7 +537,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (if (string-empty-p slug) "note" slug)))
 
 (defun boost-gptel--symbol-exists (symbol-name)
-  "Return non-nil if SYMBOL-NAME is defined in the current Emacs."
+  "Return whether SYMBOL-NAME is interned in the current Emacs."
   (if (intern-soft symbol-name)
       "true"
     "false"))
@@ -520,12 +547,13 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
   (gptel-make-tool
    :name "symbol_exists"
    :description
-   "Check whether an Emacs Lisp symbol exists."
+   "Check whether a symbol name is interned in the current Emacs session."
    :function #'boost-gptel--symbol-exists
    :args (list '(:name "symbol_name"
                  :type string
                  :description "Name of the symbol to check"))
-   :category "Emacs Runtime"))
+   :category "Emacs Runtime"
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
 
@@ -551,7 +579,8 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "function_name"
                  :type string
                  :description "Name of the function"))
-   :category "Emacs Runtime"))
+   :category "Emacs Runtime"
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 
@@ -577,39 +606,10 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "key_sequence"
                  :type string
                  :description "Key sequence such as C-x C-f or C-c m R"))
-   :category "Emacs Runtime"))
+   :category "Emacs Runtime"
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
-
-(defun boost-gptel--read-buffer (buffer-name)
-  "Return BUFFER-NAME contents, truncated to the configured limit."
-  (let ((buffer (get-buffer buffer-name)))
-    (unless buffer
-      (user-error "No live buffer named %s" buffer-name))
-    (when (boost-gptel--sensitive-buffer-p buffer)
-      (user-error "Refusing to read a sensitive buffer: %s" buffer-name))
-    (with-current-buffer buffer
-      (boost-gptel--buffer-substring-limited
-       (point-min)
-       (point-max)
-       boost-gptel-tool-max-output-chars))))
-
-;; Register read_buffer.
-(defvar boost-gptel-tool-read-buffer
-  (gptel-make-tool
-   :name "read_buffer"
-   :description
-   "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
-   :function #'boost-gptel--read-buffer
-   :args (list
-          '(:name "buffer_name"
-            :type string
-            :description "Name of the Emacs buffer to read"))
-   :category "Emacs Runtime"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-read-buffer)
 
 (defun boost-gptel--current-datetime ()
   "Return the current local date and time."
@@ -620,12 +620,12 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
   (gptel-make-tool
    :name "current_datetime"
    :description
-   "Return the current local date, time, weekday, and numeric time-zone offset."
+   "Return the current local date, time, and weekday."
    :function #'boost-gptel--current-datetime
    :args nil
    :category "Emacs Runtime"
    :confirm nil
-   :include t))
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-current-datetime)
 
@@ -674,7 +674,38 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
             :description "Complete Org-formatted note content"))
    :category "Org-mode"
    :confirm t
-   :include t))
+   :include nil))
+
+(defun boost-gptel--read-buffer (buffer-name)
+  "Return BUFFER-NAME contents, truncated to the configured limit."
+  (let ((buffer (get-buffer buffer-name)))
+    (unless buffer
+      (user-error "No live buffer named %s" buffer-name))
+    (when (boost-gptel--sensitive-buffer-p buffer)
+      (user-error "Refusing to read a sensitive buffer: %s" buffer-name))
+    (with-current-buffer buffer
+      (boost-gptel--buffer-substring-limited
+       (point-min)
+       (point-max)
+       boost-gptel-tool-max-output-chars))))
+
+;; Register read_buffer.
+(defvar boost-gptel-tool-read-buffer
+  (gptel-make-tool
+   :name "read_buffer"
+   :description
+   "Return bounded plain-text contents of a live Emacs buffer.
+Sensitive buffers are rejected and long results are truncated."
+   :function #'boost-gptel--read-buffer
+   :args (list
+          '(:name "buffer_name"
+            :type string
+            :description "Name of the Emacs buffer to read"))
+   :category "Buffer Access"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-buffer)
 
 (defun boost-gptel--list-files (&optional recursive)
   "Return file names under `boost-gptel-root', relative to it.
@@ -715,7 +746,7 @@ with the other file-management tools."
             :optional t))
    :category "File Management"
    :confirm nil
-   :include t))
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-files)
 
@@ -762,9 +793,9 @@ with the other file-management tools."
             :optional t))
    :category "File Management"
    :confirm nil
-   :include t))
+   :include nil))
 
-(defun boost-gptel--search-project (query)
+(defun boost-gptel--search-project-files (query)
   "Search project files for literal string QUERY and return matching lines."
   (when (string-empty-p (string-trim query))
     (user-error "Search query must not be empty"))
@@ -817,28 +848,28 @@ with the other file-management tools."
          boost-gptel-tool-max-output-chars)
       "No matches found.")))
 
-;; Register search_project.
-(defvar boost-gptel-tool-search-project
+;; Register search_project_files.
+(defvar boost-gptel-tool-search-project-files
   (gptel-make-tool
-   :name "search_project"
+   :name "search_project_files"
    :description
-   "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
-   :function #'boost-gptel--search-project
+   "Search a bounded set of project text files for a literal,
+case-insensitive string and return file, line number, and matching line."
+   :function #'boost-gptel--search-project-files
    :args (list
           '(:name "query"
             :type string
             :description "Non-empty literal text to search for"))
    :category "File Management"
    :confirm nil
-   :include t))
+   :include nil))
 
 (defun boost-gptel--read-file (path)
-  (let ((abs (boost-gptel--safe-path path)))
-    (if (file-exists-p abs)
-        (with-temp-buffer
-          (insert-file-contents abs)
-          (buffer-string))
-      "")))
+  "Return bounded text contents of PATH below `boost-gptel-root'."
+  (let ((file (boost-gptel--safe-path path)))
+    (when (boost-gptel--sensitive-file-p file)
+      (user-error "Refusing to read a sensitive path: %s" path))
+    (boost-gptel--read-file-limited file)))
 
 ;; Register read_file.
 (defvar boost-gptel-tool-read-file
@@ -853,7 +884,7 @@ with the other file-management tools."
             :description "Relative file path, for example 'todo.org'"))
    :category "File Management"
    :confirm nil
-   :include t))
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-file)
 
@@ -875,7 +906,7 @@ with the other file-management tools."
             :description "Path relative to the current project root"))
    :category "File Management"
    :confirm nil
-   :include t))
+   :include nil))
 
 (defun boost-gptel--write-file (path content &optional backup)
   (let* ((abs (boost-gptel--safe-path path))
@@ -910,23 +941,36 @@ with the other file-management tools."
             :optional t))
    :category "File Management"
    :confirm t
-   :include t))
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
+
+(defun boost-gptel--run-shell-command (command)
+  "Run COMMAND from `boost-gptel-root' and return bounded output."
+  (when (string-empty-p (string-trim command))
+    (user-error "Command must not be empty"))
+  (let ((default-directory
+         (file-name-as-directory
+          (expand-file-name boost-gptel-root))))
+    (boost-gptel--truncate-string
+     (shell-command-to-string command)
+     boost-gptel-tool-max-output-chars)))
 
 ;; Register run_shell_command.
 (defvar boost-gptel-tool-run-shell-command
   (gptel-make-tool
    :name "run_shell_command"
    :description
-   "Run a shell command and return its output"
-   :function (lambda (command)
-               (shell-command-to-string command))
-   :args (list '(:name "command"
-                 :type string
-                 :description "The shell command to run"))
+   "Run a confirmed shell command from the authorised working directory
+and return bounded combined output."
+   :function #'boost-gptel--run-shell-command
+   :args (list
+          '(:name "command"
+            :type string
+            :description "Exact shell command to execute"))
    :category "Command Execution"
-   :confirm t))
+   :confirm t
+   :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
 
@@ -948,7 +992,8 @@ with the other file-management tools."
 (add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
 
 (gptel-make-preset 'boost-base
-  :description "Conservative defaults with no tools selected."
+  :description
+  "Conservative defaults with no tools selected."
   :system 'default
   :tools nil
   ;; :temperature 0.2
@@ -961,37 +1006,46 @@ with the other file-management tools."
   :include-tool-results 'auto)
 
 (gptel-make-preset 'boost-precise
-  :description "Compact answers with low randomness."
+  :description
+  "Compact answers with low randomness."
   :parents 'boost-base
   :system 'precise
   ;; :temperature 0.1
   )
 
 (gptel-make-preset 'boost-coding
-  :description "Project-aware programming with read-only Emacs and project tools."
+  :description
+  "Project-aware programming with read-only inspection tools."
   :parents 'boost-base
   :system 'project-aware
-  :tools '("read_buffer"
+  :tools '("current_datetime"
+           "symbol_exists"
+           "function_documentation"
+           "lookup_key"
+           "read_buffer"
            "list_project_files"
-           "read_project_file"
-           "search_project")
+           "search_project_files"
+           "read_project_file")
   ;; :temperature 0.2
   :use-context 'system)
 
 (gptel-make-preset 'boost-code-review
-  :description "Rigorous code review using read-only project tools."
+  :description
+  "Rigorous code review using read-only project tools."
   :parents 'boost-coding
   :system 'code-review
   ;; :temperature 0.1
   )
 
 (gptel-make-preset 'boost-pair-programming
-  :description "Programming preset with an initial conversation template."
+  :description
+  "Programming preset with an initial conversation template."
   :parents 'boost-coding
   :system 'pair-programming)
 
 (gptel-make-preset 'boost-writing
-  :description "Editing and rewriting with access to the current buffer."
+  :description
+  "Editing and rewriting with access to the current buffer."
   :parents 'boost-base
   :system 'writing
   :tools '("read_buffer")
@@ -999,26 +1053,29 @@ with the other file-management tools."
   :use-context 'user)
 
 (gptel-make-preset 'boost-house-style
-  :description "Writing with an optional external house-style prompt."
+  :description
+  "Writing with an optional external house-style prompt."
   :parents 'boost-writing
   :system 'house-style
   ;; :temperature 0.4
   )
 
 (gptel-make-preset 'boost-research
-  :description "Evidence-focused analysis with bounded read-only tools."
+  :description
+  "Evidence-focused analysis with bounded read-only tools."
   :parents 'boost-base
   :system 'research
   :tools '("current_datetime"
            "read_buffer"
            "list_project_files"
            "read_project_file"
-           "search_project")
+           "search_project_files")
   ;; :temperature 0.2
   :use-context 'system)
 
 (gptel-make-preset 'boost-visible-buffers
-  :description "Research preset using all visible buffers in the selected frame as context."
+  :description
+  "Research preset using all visible buffers in the selected frame as context."
   :parents 'boost-research
   :context
   '(:eval
@@ -1030,26 +1087,29 @@ with the other file-management tools."
   :use-context 'user)
 
 (gptel-make-preset 'boost-note-taking
-  :description "Research plus confirmed creation of Org notes."
+  :description
+  "Research plus confirmed creation of Org notes."
   :parents 'boost-research
   :tools '("current_datetime"
            "read_buffer"
            "list_project_files"
            "read_project_file"
-           "search_project"
+           "search_project_files"
            "create_note")
   :confirm-tool-calls 'auto)
 
 (when boost-gptel-openai-backend
   (gptel-make-preset 'boost-openai
-    :description "Use the configured OpenAI backend."
+    :description
+    "Use the configured OpenAI backend."
     :parents 'boost-base
     :backend "OpenAI"
     :model boost-gptel-openai-model))
 
 (when boost-gptel-anthropic-backend
   (gptel-make-preset 'boost-anthropic
-    :description "Use the configured Anthropic backend."
+    :description
+    "Use the configured Anthropic backend."
     :parents 'boost-base
     :backend "Anthropic"
     :model boost-gptel-anthropic-model))
