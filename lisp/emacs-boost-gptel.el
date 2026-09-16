@@ -524,7 +524,62 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :function #'boost-gptel--symbol-exists
    :args (list '(:name "symbol_name"
                  :type string
-                 :description "Name of the symbol to check"))))
+                 :description "Name of the symbol to check"))
+   :category "Emacs Runtime"))
+
+(add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
+
+(defun boost-gptel--function-documentation (function-name)
+  "Return documentation for FUNCTION-NAME."
+  (let ((sym (intern-soft function-name)))
+    (cond
+     ((null sym)
+      (format "Function `%s' does not exist." function-name))
+     ((not (fboundp sym))
+      (format "`%s' exists but is not a function." function-name))
+     (t
+      (or (documentation sym t)
+          (format "No documentation available for `%s'." function-name))))))
+
+;; Register function_documentation.
+(defvar boost-gptel-tool-function-documentation
+  (gptel-make-tool
+   :name "function_documentation"
+   :description
+   "Return the documentation string of an Emacs Lisp function."
+   :function #'boost-gptel--function-documentation
+   :args (list '(:name "function_name"
+                 :type string
+                 :description "Name of the function"))
+   :category "Emacs Runtime"))
+
+(add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
+
+(defun boost-gptel--lookup-key (key-sequence)
+  "Return the command bound to KEY-SEQUENCE."
+  (let* ((key (kbd key-sequence))
+         (binding (key-binding key t)))
+    (cond
+     ((null binding)
+      (format "No command is bound to `%s'." key-sequence))
+     ((symbolp binding)
+      (symbol-name binding))
+     (t
+      (prin1-to-string binding)))))
+
+;; Register lookup_key.
+(defvar boost-gptel-tool-lookup-key
+  (gptel-make-tool
+   :name "lookup_key"
+   :description
+   "Return the command currently bound to a key sequence."
+   :function #'boost-gptel--lookup-key
+   :args (list '(:name "key_sequence"
+                 :type string
+                 :description "Key sequence such as C-x C-f or C-c m R"))
+   :category "Emacs Runtime"))
+
+(add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
 
 (defun boost-gptel--read-buffer (buffer-name)
   "Return BUFFER-NAME contents, truncated to the configured limit."
@@ -551,6 +606,73 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
             :type string
             :description "Name of the Emacs buffer to read"))
    :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-buffer)
+
+(defun boost-gptel--current-datetime ()
+  "Return the current local date and time."
+  (format-time-string "[%Y-%m-%d %a %H:%M]"))
+
+;; Register current_datetime.
+(defvar boost-gptel-tool-current-datetime
+  (gptel-make-tool
+   :name "current_datetime"
+   :description
+   "Return the current local date, time, weekday, and numeric time-zone offset."
+   :function #'boost-gptel--current-datetime
+   :args nil
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-current-datetime)
+
+(defun boost-gptel--create-note (title content)
+  "Create an Org note with TITLE and CONTENT in the configured note directory."
+  (when (string-empty-p (string-trim title))
+    (user-error "Note title must not be empty"))
+  (make-directory boost-gptel-note-directory t)
+  (let* ((clean-title
+          (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
+         (stamp (format-time-string "%Y%m%d-%H%M%S"))
+         (slug
+          (truncate-string-to-width
+           (boost-gptel--slugify clean-title)
+           60
+           nil
+           nil))
+         (file
+          (make-temp-file
+           (expand-file-name
+            (format "%s-%s-" stamp slug)
+            boost-gptel-note-directory)
+           nil
+           ".org")))
+    (with-temp-file file
+      (insert "#+TITLE:     " clean-title "\n")
+      (insert "#+DATE:      " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n\n")
+      (insert content)
+      (unless (string-suffix-p "\n" content)
+        (insert "\n")))
+    (format "Created note: %s" (abbreviate-file-name file))))
+
+;; Register create_note.
+(defvar boost-gptel-tool-create-note
+  (gptel-make-tool
+   :name "create_note"
+   :description
+   "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
+   :function #'boost-gptel--create-note
+   :args (list
+          '(:name "title"
+            :type string
+            :description "Short note title")
+          '(:name "content"
+            :type string
+            :description "Complete Org-formatted note content"))
+   :category "Org-mode"
    :confirm t
    :include t))
 
@@ -672,7 +794,6 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
          boost-gptel-tool-max-output-chars)
       "No matches found.")))
 
-
 ;; Register search_project.
 (defvar boost-gptel-tool-search-project
   (gptel-make-tool
@@ -770,68 +891,21 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
 
-(defun boost-gptel--current-datetime ()
-  "Return the current local date and time."
-  (format-time-string "[%Y-%m-%d %a %H:%M]"))
-
-;; Register current_datetime.
-(defvar boost-gptel-tool-current-datetime
+;; Register run_shell_command.
+(defvar boost-gptel-tool-run-shell-command
   (gptel-make-tool
-   :name "current_datetime"
+   :name "run_shell_command"
    :description
-   "Return the current local date, time, weekday, and numeric time-zone offset."
-   :function #'boost-gptel--current-datetime
-   :args nil
-   :category "Org-mode"
-   :confirm nil
-   :include t))
+   "Run a shell command and return its output"
+   :function (lambda (command)
+               (shell-command-to-string command))
+   :args (list '(:name "command"
+                 :type string
+                 :description "The shell command to run"))
+   :category "Command Execution"
+   :confirm t))
 
-(defun boost-gptel--create-note (title content)
-  "Create an Org note with TITLE and CONTENT in the configured note directory."
-  (when (string-empty-p (string-trim title))
-    (user-error "Note title must not be empty"))
-  (make-directory boost-gptel-note-directory t)
-  (let* ((clean-title
-          (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
-         (stamp (format-time-string "%Y%m%d-%H%M%S"))
-         (slug
-          (truncate-string-to-width
-           (boost-gptel--slugify clean-title)
-           60
-           nil
-           nil))
-         (file
-          (make-temp-file
-           (expand-file-name
-            (format "%s-%s-" stamp slug)
-            boost-gptel-note-directory)
-           nil
-           ".org")))
-    (with-temp-file file
-      (insert "#+TITLE:     " clean-title "\n")
-      (insert "#+DATE:      " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n\n")
-      (insert content)
-      (unless (string-suffix-p "\n" content)
-        (insert "\n")))
-    (format "Created note: %s" (abbreviate-file-name file))))
-
-;; Register create_note.
-(defvar boost-gptel-tool-create-note
-  (gptel-make-tool
-   :name "create_note"
-   :description
-   "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
-   :function #'boost-gptel--create-note
-   :args (list
-          '(:name "title"
-            :type string
-            :description "Short note title")
-          '(:name "content"
-            :type string
-            :description "Complete Org-formatted note content"))
-   :category "Org-mode"
-   :confirm t
-   :include t))
+(add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
 
 (defun boost-gptel--pre-tool-policy (call)
   "Apply additional policy to a GPTel tool CALL plist."
