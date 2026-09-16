@@ -509,36 +509,24 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (setq slug (replace-regexp-in-string "^-+\\|-+$" "" slug))
     (if (string-empty-p slug) "note" slug)))
 
-(defun boost-gptel--list-files ()
-  (seq-filter
-   (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
-   (directory-files boost-gptel-root nil "^[^.].*")))
+(defun boost-gptel-symbol-exists (symbol-name)
+  "Return non-nil if SYMBOL-NAME is defined in the current Emacs."
 
-(defun boost-gptel--read-file (path)
-  (let ((abs (boost-gptel--safe-path path)))
-    (if (file-exists-p abs)
-        (with-temp-buffer
-          (insert-file-contents abs)
-          (buffer-string))
-      "")))
+  (if (intern-soft symbol-name)
+      "true"
+    "false"))
 
-(defun boost-gptel--write-file (path content &optional backup)
-  (let* ((abs (boost-gptel--safe-path path))
-         (backup (if (null backup) t backup)))
-    (make-directory (file-name-directory abs) t)
-    (when (and backup (file-exists-p abs))
-      (copy-file abs (concat abs ".bak") t))
-    (with-temp-file abs
-      (insert content))
-    (format "Wrote %s (%d bytes)"
-            (file-relative-name abs boost-gptel-root)
-            (string-bytes content))))
+;; Register symbol_exists.
+(defvar boost-gptel-tool-symbol-exists
+  (gptel-make-tool
+   :name "symbol_exists"
+   :description "Check whether an Emacs Lisp symbol exists."
+   :function #'boost-gptel-symbol-exists
+   :args (list '(:name "symbol_name"
+                 :type string
+                 :description "Name of the symbol to check"))))
 
-(defun boost-gptel-tool-current-datetime ()
-  "Return the current local date, time, and time-zone offset."
-  (format-time-string "[%Y-%m-%d %a %H:%M]"))
-
-(defun boost-gptel-tool-read-buffer (buffer-name)
+(defun boost-gptel-read-buffer (buffer-name)
   "Return BUFFER-NAME contents, truncated to the configured limit."
   (let ((buffer (get-buffer buffer-name)))
     (unless buffer
@@ -551,7 +539,43 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
        (point-max)
        boost-gptel-tool-max-output-chars))))
 
-(defun boost-gptel-tool-list-project-files (&optional extension)
+;; Register read_buffer.
+(defvar boost-gptel-tool-read-buffer
+  (gptel-make-tool
+   :name "read_buffer"
+   :description
+   "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
+   :function #'boost-gptel-read-buffer
+   :args
+   (list
+    '(:name "buffer_name"
+      :type string
+      :description "Name of the Emacs buffer to read"))
+   :category "emacs-read"
+   :confirm t
+   :include t))
+
+(defun boost-gptel-list-files ()
+  (seq-filter
+   (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
+   (directory-files boost-gptel-root nil "^[^.].*")))
+
+;; Register list_files.
+(defvar boost-gptel-tool-list-files
+  (gptel-make-tool
+   :name "list_files"
+   :description
+   "List files below the authorised root directory."
+   :function (lambda ()
+               (mapconcat #'identity (boost-gptel-list-files) "\n"))
+   :args nil
+   :category "filesystem"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-list-files)
+
+(defun boost-gptel-list-project-files (&optional extension)
   "Return project-relative file names, optionally filtered by EXTENSION."
   (let* ((project (or (project-current nil)
                       (user-error "No current project")))
@@ -580,12 +604,24 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
       "\n")
      boost-gptel-tool-max-output-chars)))
 
-(defun boost-gptel-tool-read-project-file (relative-path)
-  "Return the contents of project file RELATIVE-PATH."
-  (boost-gptel-read-file-limited
-   (boost-gptel-safe-project-file relative-path)))
+;; Register list_project_files.
+(defvar boost-gptel-tool-list-project-files
+  (gptel-make-tool
+   :name "list_project_files"
+   :descriptiown
+   "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
+   :function #'boost-gptel-list-project-files
+   :args
+   (list
+    '(:name "extension"
+      :type string
+      :description "Optional file extension, with or without a leading dot"
+      :optional t))
+   :category "project-read"
+   :confirm nil
+   :include t))
 
-(defun boost-gptel-tool-search-project (query)
+(defun boost-gptel-search-project (query)
   "Search project files for literal string QUERY and return matching lines."
   (when (string-empty-p (string-trim query))
     (user-error "Search query must not be empty"))
@@ -638,7 +674,128 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
          boost-gptel-tool-max-output-chars)
       "No matches found.")))
 
-(defun boost-gptel-tool-create-note (title content)
+
+;; Register search_project.
+(defvar boost-gptel-tool-search-project
+  (gptel-make-tool
+   :name "search_project"
+   :description
+   "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
+   :function #'boost-gptel-search-project
+   :args
+   (list
+    '(:name "query"
+      :type string
+      :description "Non-empty literal text to search for"))
+   :category "project-read"
+   :confirm nil
+   :include t))
+
+(defun boost-gptel-read-file (path)
+  (let ((abs (boost-gptel--safe-path path)))
+    (if (file-exists-p abs)
+        (with-temp-buffer
+          (insert-file-contents abs)
+          (buffer-string))
+      "")))
+
+;; Register read_file.
+(defvar boost-gptel-tool-read-file
+  (gptel-make-tool
+   :name "read_file"
+   :description
+   "Read a text file below the authorised root directory."
+   :function (lambda (path) (boost-gptel-read-file path))
+   :args
+   (list
+    '(:name "path"
+      :type string
+      :description "Relative file path, for example 'todo.org'"))
+   :category "filesystem"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-file)
+
+(defun boost-gptel-read-project-file (relative-path)
+  "Return the contents of project file RELATIVE-PATH."
+  (boost-gptel-read-file-limited
+   (boost-gptel-safe-project-file relative-path)))
+
+;; Register read_project_file.
+(defvar boost-gptel-tool-read-project-file
+  (gptel-make-tool
+   :name "read_project_file"
+   :description
+   "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
+   :function #'boost-gptel-read-project-file
+   :args
+   (list
+    '(:name "relative_path"
+      :type string
+      :description "Path relative to the current project root"))
+   :category "project-read"
+   :confirm nil
+   :include t))
+
+(defun boost-gptel-write-file (path content &optional backup)
+  (let* ((abs (boost-gptel--safe-path path))
+         (backup (if (null backup) t backup)))
+    (make-directory (file-name-directory abs) t)
+    (when (and backup (file-exists-p abs))
+      (copy-file abs (concat abs ".bak") t))
+    (with-temp-file abs
+      (insert content))
+    (format "Wrote %s (%d bytes)"
+            (file-relative-name abs boost-gptel-root)
+            (string-bytes content))))
+
+;; Register write_file.
+(defvar boost-gptel-tool-write-file
+  (gptel-make-tool
+   :name "write_file"
+   :description
+   "Replace a text file below the authorised root directory."
+   :function (lambda (path content &optional backup)
+               (boost-gptel-write-file path content backup))
+   :args
+   (list
+    '(:name "path"
+      :type string
+      :description
+      "Relative file path, for example 'todo.org'")
+    '(:name "content"
+      :type string
+      :description
+      "Complete replacement content of the file")
+    '(:name "backup"
+      :type boolean
+      :description
+      "Create a .bak copy before replacing an existing file (default: true)"
+      :optional t))
+   :category "filesystem"
+   :confirm t
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-write-file)
+
+(defun boost-gptel-current-datetime ()
+  "Return the current local date and time."
+  (format-time-string "[%Y-%m-%d %a %H:%M]"))
+
+;; Register current_datetime.
+(defvar boost-gptel-tool-current-datetime
+  (gptel-make-tool
+   :name "current_datetime"
+   :description
+   "Return the current local date, time, weekday, and numeric time-zone offset."
+   :function #'boost-gptel-current-datetime
+   :args nil
+   :category "environment"
+   :confirm nil
+   :include t))
+
+(defun boost-gptel-create-note (title content)
   "Create an Org note with TITLE and CONTENT in the configured note directory."
   (when (string-empty-p (string-trim title))
     (user-error "Note title must not be empty"))
@@ -667,160 +824,24 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
         (insert "\n")))
     (format "Created note: %s" (abbreviate-file-name file))))
 
-(defvar boost-gptel-tool-current-datetime nil)
-(defvar boost-gptel-tool-read-buffer nil)
-(defvar boost-gptel-tool-list-project-files nil)
-(defvar boost-gptel-tool-read-project-file nil)
-(defvar boost-gptel-tool-search-project nil)
-(defvar boost-gptel-tool-create-note nil)
-
-(setq boost-gptel-tool-list-files
-      (gptel-make-tool
-       :name "list_files"
-       :description
-       "List files below the authorised root directory."
-       :function (lambda ()
-                   (mapconcat #'identity (boost-gptel--list-files) "\n"))
-       :args nil
-       :category "filesystem"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-read-file
-      (gptel-make-tool
-       :name "read_file"
-       :description
-       "Read a text file below the authorised root directory."
-       :function (lambda (path) (boost-gptel--read-file path))
-       :args
-       (list
-        '(:name "path"
-           :type string
-           :description "Relative file path, for example 'todo.org'"))
-       :category "filesystem"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-write-file
-      (gptel-make-tool
-       :name "write_file"
-       :description
-       "Replace a text file below the authorised root directory."
-       :function (lambda (path content &optional backup)
-                   (boost-gptel--write-file path content backup))
-       :args
-       (list
-        '(:name "path"
-          :type string
-          :description
-          "Relative file path, for example 'todo.org'")
-        '(:name "content"
-          :type string
-          :description
-          "Complete replacement content of the file")
-        '(:name "backup"
-          :type boolean
-          :description
-          "Create a .bak copy before replacing an existing file (default: true)"
-          :optional t))
-       :category "filesystem"
-       :confirm t
-       :include t))
-
-(with-eval-after-load 'gptel
-  (add-to-list 'gptel-tools boost-gptel-tool-list-files)
-  (add-to-list 'gptel-tools boost-gptel-tool-read-file)
-  (add-to-list 'gptel-tools boost-gptel-tool-write-file))
-
-(setq boost-gptel-tool-current-datetime
-      (gptel-make-tool
-       :name "current_datetime"
-       :description
-       "Return the current local date, time, weekday, and numeric time-zone offset."
-       :function #'boost-gptel-tool-current-datetime
-       :args nil
-       :category "environment"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-read-buffer
-      (gptel-make-tool
-       :name "read_buffer"
-       :description
-       "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
-       :function #'boost-gptel-tool-read-buffer
-       :args
-       (list
-        '(:name "buffer_name"
-          :type string
-          :description "Exact name of the Emacs buffer to read"))
-       :category "emacs-read"
-       :confirm t
-       :include t))
-
-(setq boost-gptel-tool-list-project-files
-      (gptel-make-tool
-       :name "list_project_files"
-       :descriptiown
-       "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
-       :function #'boost-gptel-tool-list-project-files
-       :args
-       (list
-        '(:name "extension"
-          :type string
-          :description "Optional file extension, with or without a leading dot"
-          :optional t))
-       :category "project-read"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-read-project-file
-      (gptel-make-tool
-       :name "read_project_file"
-       :description
-       "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
-       :function #'boost-gptel-tool-read-project-file
-       :args
-       (list
-        '(:name "relative_path"
-          :type string
-          :description "Path relative to the current project root"))
-       :category "project-read"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-search-project
-      (gptel-make-tool
-       :name "search_project"
-       :description
-       "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
-       :function #'boost-gptel-tool-search-project
-       :args
-       (list
-        '(:name "query"
-          :type string
-          :description "Non-empty literal text to search for"))
-       :category "project-read"
-       :confirm nil
-       :include t))
-
-(setq boost-gptel-tool-create-note
-      (gptel-make-tool
-       :name "create_note"
-       :description
-       "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
-       :function #'boost-gptel-tool-create-note
-       :args
-       (list
-        '(:name "title"
-          :type string
-          :description "Short note title")
-        '(:name "content"
-          :type string
-          :description "Complete Org-formatted note content"))
-       :category "notes-write"
-       :confirm t
-       :include t))
+;; Register create_note.
+(defvar boost-gptel-tool-create-note
+  (gptel-make-tool
+   :name "create_note"
+   :description
+   "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
+   :function #'boost-gptel-create-note
+   :args
+   (list
+    '(:name "title"
+      :type string
+      :description "Short note title")
+    '(:name "content"
+      :type string
+      :description "Complete Org-formatted note content"))
+   :category "notes-write"
+   :confirm t
+   :include t))
 
 (defun boost-gptel-pre-tool-policy (call)
   "Apply additional policy to a GPTel tool CALL plist."
@@ -834,7 +855,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (defun boost-gptel-post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
-  (message "[gptel tool completed: %s]" (plist-get call :name))
+  (message "[GPTel tool completed: %s]" (plist-get call :name))
   nil)
 
 (add-hook 'gptel-post-tool-call-functions #'boost-gptel-post-tool-log)
