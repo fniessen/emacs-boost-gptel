@@ -676,20 +676,43 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm t
    :include t))
 
-(defun boost-gptel--list-files ()
-  (seq-filter
-   (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
-   (directory-files boost-gptel-root nil "^[^.].*")))
+(defun boost-gptel--list-files (&optional recursive)
+  "Return file names under `boost-gptel-root', relative to it.
+Non-recursive (default): only files directly inside the root.
+When RECURSIVE is non-nil: walk subdirectories too, skipping any
+directory whose name starts with a dot (e.g. .git), and excluding
+files that `boost-gptel--sensitive-file-p' rejects, for consistency
+with the other file-management tools."
+  (if recursive
+      (let ((files
+             (directory-files-recursively
+              boost-gptel-root
+              "^[^.].*"
+              nil
+              (lambda (dir)
+                (not (string-prefix-p
+                      "." (file-name-nondirectory
+                           (directory-file-name dir))))))))
+        (mapcar
+         (lambda (f) (file-relative-name f boost-gptel-root))
+         (seq-remove #'boost-gptel--sensitive-file-p files)))
+    (seq-filter
+     (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
+     (directory-files boost-gptel-root nil "^[^.].*"))))
 
 ;; Register list_files.
 (defvar boost-gptel-tool-list-files
   (gptel-make-tool
    :name "list_files"
    :description
-   "List files below the authorised root directory."
-   :function (lambda ()
-               (mapconcat #'identity (boost-gptel--list-files) "\n"))
-   :args nil
+   "List files inside the authorised root directory. By default only the top level; pass recursive=true to also list files in subdirectories (hidden directories such as .git are always skipped)."
+   :function (lambda (&optional recursive)
+               (mapconcat #'identity (boost-gptel--list-files recursive) "\n"))
+   :args (list
+          '(:name "recursive"
+            :type boolean
+            :description "List files in subdirectories too (default: false)"
+            :optional t))
    :category "File Management"
    :confirm nil
    :include t))
@@ -729,7 +752,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (defvar boost-gptel-tool-list-project-files
   (gptel-make-tool
    :name "list_project_files"
-   :descriptiown
+   :description
    "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
    :function #'boost-gptel--list-project-files
    :args (list
