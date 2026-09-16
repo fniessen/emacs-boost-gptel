@@ -642,52 +642,6 @@ taking its active local and minor-mode keymaps into account."
 
 (add-to-list 'gptel-tools boost-gptel-tool-current-datetime)
 
-(defun boost-gptel--create-note (title content)
-  "Create an Org note with TITLE and CONTENT in the configured note directory."
-  (when (string-empty-p (string-trim title))
-    (user-error "Note title must not be empty"))
-  (let* ((clean-title
-          (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
-         (stamp (format-time-string "%Y%m%d-%H%M%S"))
-         (slug
-          (truncate-string-to-width
-           (boost-gptel--slugify clean-title)
-           60
-           nil
-           nil))
-         (file
-          (make-temp-file
-           (expand-file-name
-            (format "%s-%s-" stamp slug)
-            boost-gptel-note-directory)
-           nil
-           ".org")))
-    (with-temp-file file
-      (insert "#+TITLE:     " clean-title "\n")
-      (insert "#+DATE:      " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n\n")
-      (insert content)
-      (unless (string-suffix-p "\n" content)
-        (insert "\n")))
-    (format "Created note: %s" (abbreviate-file-name file))))
-
-;; Register create_note.
-(defvar boost-gptel-tool-create-note
-  (gptel-make-tool
-   :name "create_note"
-   :description
-   "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
-   :function #'boost-gptel--create-note
-   :args (list
-          '(:name "title"
-            :type string
-            :description "Short note title")
-          '(:name "content"
-            :type string
-            :description "Complete Org-formatted note content"))
-   :category "Org-mode"
-   :confirm t
-   :include nil))
-
 (defun boost-gptel--read-buffer (buffer-name)
   "Return BUFFER-NAME contents, truncated to the configured limit."
   (let ((buffer (get-buffer buffer-name)))
@@ -815,6 +769,8 @@ directories such as .git are always skipped)."
    :confirm nil
    :include nil))
 
+(add-to-list 'gptel-tools boost-gptel-tool-list-project-files)
+
 (defun boost-gptel--search-project-files (query)
   "Search project files for literal string QUERY and return matching lines."
   (when (string-empty-p (string-trim query))
@@ -893,6 +849,8 @@ case-insensitive string and return file, line number, and matching line."
    :confirm nil
    :include nil))
 
+(add-to-list 'gptel-tools boost-gptel-tool-search-project-files)
+
 (defun boost-gptel--read-file (path)
   "Return bounded text contents of PATH below `boost-gptel-root'."
   (let ((file (boost-gptel--safe-path path)))
@@ -936,6 +894,8 @@ case-insensitive string and return file, line number, and matching line."
    :category "File Management"
    :confirm nil
    :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-project-file)
 
 (defun boost-gptel--write-file (path content &optional backup)
   (let* ((abs (boost-gptel--safe-path path))
@@ -1014,6 +974,54 @@ and return bounded combined output."
    :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
+
+(defun boost-gptel--create-note (title content)
+  "Create an Org note with TITLE and CONTENT in the configured note directory."
+  (when (string-empty-p (string-trim title))
+    (user-error "Note title must not be empty"))
+  (let* ((clean-title
+          (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
+         (stamp (format-time-string "%Y%m%d-%H%M%S"))
+         (slug
+          (truncate-string-to-width
+           (boost-gptel--slugify clean-title)
+           60
+           nil
+           nil))
+         (file
+          (make-temp-file
+           (expand-file-name
+            (format "%s-%s-" stamp slug)
+            boost-gptel-note-directory)
+           nil
+           ".org")))
+    (with-temp-file file
+      (insert "#+TITLE:     " clean-title "\n")
+      (insert "#+DATE:      " (format-time-string "[%Y-%m-%d %a %H:%M]") "\n\n")
+      (insert content)
+      (unless (string-suffix-p "\n" content)
+        (insert "\n")))
+    (format "Created note: %s" (abbreviate-file-name file))))
+
+;; Register create_note.
+(defvar boost-gptel-tool-create-note
+  (gptel-make-tool
+   :name "create_note"
+   :description
+   "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
+   :function #'boost-gptel--create-note
+   :args (list
+          '(:name "title"
+            :type string
+            :description "Short note title")
+          '(:name "content"
+            :type string
+            :description "Complete Org-formatted note content"))
+   :category "Org-mode"
+   :confirm t
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-create-note)
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
