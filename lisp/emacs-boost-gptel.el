@@ -519,7 +519,8 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (defvar boost-gptel-tool-symbol-exists
   (gptel-make-tool
    :name "symbol_exists"
-   :description "Check whether an Emacs Lisp symbol exists."
+   :description
+   "Check whether an Emacs Lisp symbol exists."
    :function #'boost-gptel--symbol-exists
    :args (list '(:name "symbol_name"
                  :type string
@@ -545,12 +546,11 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
    :function #'boost-gptel--read-buffer
-   :args
-   (list
-    '(:name "buffer_name"
-      :type string
-      :description "Name of the Emacs buffer to read"))
-   :category "emacs-read"
+   :args (list
+          '(:name "buffer_name"
+            :type string
+            :description "Name of the Emacs buffer to read"))
+   :category "Emacs Runtime"
    :confirm t
    :include t))
 
@@ -568,7 +568,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :function (lambda ()
                (mapconcat #'identity (boost-gptel--list-files) "\n"))
    :args nil
-   :category "filesystem"
+   :category "File Management"
    :confirm nil
    :include t))
 
@@ -610,13 +610,12 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :descriptiown
    "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
    :function #'boost-gptel--list-project-files
-   :args
-   (list
-    '(:name "extension"
-      :type string
-      :description "Optional file extension, with or without a leading dot"
-      :optional t))
-   :category "project-read"
+   :args (list
+          '(:name "extension"
+            :type string
+            :description "Optional file extension, with or without a leading dot"
+            :optional t))
+   :category "File Management"
    :confirm nil
    :include t))
 
@@ -681,12 +680,11 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
    :function #'boost-gptel--search-project
-   :args
-   (list
-    '(:name "query"
-      :type string
-      :description "Non-empty literal text to search for"))
-   :category "project-read"
+   :args (list
+          '(:name "query"
+            :type string
+            :description "Non-empty literal text to search for"))
+   :category "File Management"
    :confirm nil
    :include t))
 
@@ -705,12 +703,11 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Read a text file below the authorised root directory."
    :function (lambda (path) (boost-gptel--read-file path))
-   :args
-   (list
-    '(:name "path"
-      :type string
-      :description "Relative file path, for example 'todo.org'"))
-   :category "filesystem"
+   :args (list
+          '(:name "path"
+            :type string
+            :description "Relative file path, for example 'todo.org'"))
+   :category "File Management"
    :confirm nil
    :include t))
 
@@ -728,12 +725,11 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
    :function #'boost-gptel--read-project-file
-   :args
-   (list
-    '(:name "relative_path"
-      :type string
-      :description "Path relative to the current project root"))
-   :category "project-read"
+   :args (list
+          '(:name "relative_path"
+            :type string
+            :description "Path relative to the current project root"))
+   :category "File Management"
    :confirm nil
    :include t))
 
@@ -757,22 +753,18 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    "Replace a text file below the authorised root directory."
    :function (lambda (path content &optional backup)
                (boost-gptel--write-file path content backup))
-   :args
-   (list
-    '(:name "path"
-      :type string
-      :description
-      "Relative file path, for example 'todo.org'")
-    '(:name "content"
-      :type string
-      :description
-      "Complete replacement content of the file")
-    '(:name "backup"
-      :type boolean
-      :description
-      "Create a .bak copy before replacing an existing file (default: true)"
-      :optional t))
-   :category "filesystem"
+   :args (list
+          '(:name "path"
+            :type string
+            :description "Relative file path, for example 'todo.org'")
+          '(:name "content"
+            :type string
+            :description "Complete replacement content of the file")
+          '(:name "backup"
+            :type boolean
+            :description "Create a .bak copy before replacing an existing file (default: true)"
+            :optional t))
+   :category "File Management"
    :confirm t
    :include t))
 
@@ -790,7 +782,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    "Return the current local date, time, weekday, and numeric time-zone offset."
    :function #'boost-gptel--current-datetime
    :args nil
-   :category "environment"
+   :category "Org-mode"
    :confirm nil
    :include t))
 
@@ -830,15 +822,14 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
    :function #'boost-gptel--create-note
-   :args
-   (list
-    '(:name "title"
-      :type string
-      :description "Short note title")
-    '(:name "content"
-      :type string
-      :description "Complete Org-formatted note content"))
-   :category "notes-write"
+   :args (list
+          '(:name "title"
+            :type string
+            :description "Short note title")
+          '(:name "content"
+            :type string
+            :description "Complete Org-formatted note content"))
+   :category "Org-mode"
    :confirm t
    :include t))
 
