@@ -5,13 +5,13 @@
 
 ;;; Code:
 
-(boost--try-require 'cl-lib)            ; cl-incf, cl-delete-if-not, cl-remove-if
-(boost--try-require 'seq)               ; seq-remove, seq-filter, seq-take
-(boost--try-require 'subr-x)            ; string-trim, string-empty-p, string-join, when-let*
+(require 'cl-lib)               ; cl-incf, cl-delete-if-not, cl-remove-if
+(require 'seq)                  ; seq-remove, seq-filter, seq-take
+(require 'subr-x)               ; string-trim, string-empty-p, string-join, when-let*
 ;; (boost--try-require 'auth-source)
-(boost--try-require 'project)
-(boost--try-require 'pp)
-(boost--try-require 'org)
+(require 'project)
+(require 'pp)
+(require 'org)
 
 (unless (boost--try-require 'gptel)
   (error "GPTel is required by emacs-boost-gptel"))
@@ -28,13 +28,13 @@
   :group 'boost-gptel)
 
 (defcustom boost-gptel-note-directory
-  (expand-file-name "gptel-notes/" user-emacs-directory)
+  "~/org/"
   "Directory in which the confirmed create_note tool may write Org files."
   :type 'directory
   :group 'boost-gptel)
 
 (defcustom boost-gptel-private-file
-  (expand-file-name "private/local-gptel.el" user-emacs-directory)
+  (expand-file-name "init_local_gptel.el" user-emacs-directory)
   "Optional non-versioned file loaded before backend registration."
   :type 'file
   :group 'boost-gptel)
@@ -65,15 +65,15 @@
   :group 'boost-gptel)
 
 (defcustom boost-gptel-sensitive-file-regexp
-  (rx (seq
-       (or string-start "/")
-       (or ".env" ".envrc" ".direnv" ".authinfo" ".netrc"
-           ".ssh" ".gnupg" "id_rsa" "id_ed25519"
-           "credentials" "secret" "secrets")
-       (or string-end "/" ".")))
-  "Regexp for project paths that GPTel read tools must reject.
+  (rx
+   (or string-start "/")
+   (or ".env" ".envrc" ".direnv" ".authinfo" ".netrc"
+       ".ssh" ".gnupg" "id_rsa" "id_ed25519"
+       "credentials" "secret" "secrets")
+   (or string-end "/" "." "-" "_"))
+  "Regexp matching paths rejected by GPTel file-reading tools.
 
-This is a conservative example, not a complete secret-detection mechanism."
+This is a conservative guardrail, not a complete secret-detection mechanism."
   :type 'regexp
   :group 'boost-gptel)
 
@@ -130,16 +130,6 @@ The value `current' leaves GPTel's existing backend and model unchanged."
           (const :tag "OpenAI API" openai)
           (const :tag "Anthropic" anthropic))
   :group 'boost-gptel)
-
-(defun boost-gptel--get-known-backend (name)
-  "Return the GPTel backend already registered under NAME, or nil.
-
-This lets us reuse a backend GPTel ships with by default (such as its
-built-in \"Claude\" Anthropic backend, complete with its curated model
-list, pricing and context-window metadata) instead of registering a
-second, redundant backend next to it."
-  (and (boundp 'gptel--known-backends)
-       (alist-get name gptel--known-backends nil nil #'equal)))
 
 (defvar boost-gptel-openai-backend nil)
 
@@ -311,8 +301,10 @@ second, redundant backend next to it."
 (defconst boost-gptel-pair-programming-template
   (list
    boost-gptel-prompt-programming
-   "Before changing code, briefly restate the requirement and list material assumptions."
-   "Understood. I will first restate the requirement and identify material assumptions, then propose the smallest safe change."))
+   "Before changing code, briefly restate the requirement and list material
+assumptions."
+   "Understood. I will first restate the requirement and identify material
+assumptions, then propose the smallest safe change."))
 
 (dolist
     (entry
@@ -368,7 +360,7 @@ second, redundant backend next to it."
       (let ((file (expand-file-name relative root)))
         (when (file-readable-p file)
           (gptel-context-add-file
-           (boost-gptel-safe-project-file relative))
+           (boost-gptel--safe-project-file relative))
           (cl-incf added))))
     (message "[Added %d project context file%s]"
              added
@@ -388,16 +380,26 @@ second, redundant backend next to it."
     (princ "Active GPTel context:\n\n")
     (pp gptel-context)))
 
-(defvar boost-gptel-root (expand-file-name "~/")
-  "Authorised working directory for GPTel file tools.")
+(defcustom boost-gptel-root
+  (expand-file-name "~/")
+  "Authorised working directory for GPTel file tools.
+
+This directory limits the paths accepted by file-management tools.  It does
+not sandbox commands executed by `run_shell_command'."
+  :type 'directory
+  :group 'boost-gptel)
 
 (make-directory boost-gptel-root t)
 
 (defun boost-gptel--safe-path (path)
-  "Return an absolute non-directory PATH below `boost-gptel-root'.
+  "Return a safe absolute file name below `boost-gptel-root'.
 
-Signal an error when PATH is absolute, escapes the authorised root, resolves
-through an existing symbolic link outside that root, or names a directory."
+PATH must be relative.  Existing symbolic links in the path must not resolve
+outside the authorised root.  Signal an error for directories and sensitive
+paths."
+  (unless (and (stringp path)
+               (not (string-empty-p path)))
+    (user-error "Path must be a non-empty string"))
   (when (file-name-absolute-p path)
     (user-error "Expected a path relative to the authorised root"))
   (let* ((root
@@ -405,27 +407,22 @@ through an existing symbolic link outside that root, or names a directory."
            (file-truename boost-gptel-root)))
          (expanded
           (expand-file-name path root))
-         (existing-parent
-          (locate-dominating-file
-           expanded
-           (lambda (directory)
-             (file-exists-p directory))))
-         (checked
-          (if (file-exists-p expanded)
-              (file-truename expanded)
-            expanded)))
-    (unless (file-in-directory-p checked root)
+         (parent
+          (file-name-directory expanded))
+         (true-parent
+          (file-name-as-directory
+           (file-truename parent)))
+         (resolved
+          (expand-file-name
+           (file-name-nondirectory expanded)
+           true-parent)))
+    (unless (file-in-directory-p resolved root)
       (user-error "Path escapes the authorised root: %s" path))
-    (when (and existing-parent
-               (not (file-in-directory-p
-                     (file-truename existing-parent)
-                     root)))
-      (user-error "Path resolves outside the authorised root: %s" path))
-    (when (file-directory-p expanded)
+    (when (file-directory-p resolved)
       (user-error "Expected a file path, not a directory: %s" path))
-    (when (boost-gptel--sensitive-file-p expanded)
+    (when (boost-gptel--sensitive-file-p resolved)
       (user-error "Refusing access to a sensitive path: %s" path))
-    expanded))
+    resolved))
 
 (defun boost-gptel--project-root (&optional directory)
   "Return the current project root for DIRECTORY, or nil."
@@ -558,16 +555,26 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
 
 (defun boost-gptel--function-documentation (function-name)
-  "Return documentation for FUNCTION-NAME."
-  (let ((sym (intern-soft function-name)))
+  "Return runtime documentation and source location for FUNCTION-NAME."
+  (let ((symbol (intern-soft function-name)))
     (cond
-     ((null sym)
+     ((null symbol)
       (format "Function `%s' does not exist." function-name))
-     ((not (fboundp sym))
-      (format "`%s' exists but is not a function." function-name))
+     ((not (fboundp symbol))
+      (format "`%s' is interned but is not defined as a function."
+              function-name))
      (t
-      (or (documentation sym t)
-          (format "No documentation available for `%s'." function-name))))))
+      (string-join
+       (delq nil
+             (list
+              (format "Function: %s" function-name)
+              (when-let* ((file (symbol-file symbol 'defun)))
+                (format "Defined in: %s"
+                        (abbreviate-file-name file)))
+              ""
+              (or (documentation symbol t)
+                  "No documentation is available.")))
+       "\n")))))
 
 ;; Register function_documentation.
 (defvar boost-gptel-tool-function-documentation
@@ -585,23 +592,29 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 
 (defun boost-gptel--lookup-key (key-sequence)
-  "Return the command bound to KEY-SEQUENCE."
-  (let* ((key (kbd key-sequence))
-         (binding (key-binding key t)))
-    (cond
-     ((null binding)
-      (format "No command is bound to `%s'." key-sequence))
-     ((symbolp binding)
-      (symbol-name binding))
-     (t
-      (prin1-to-string binding)))))
+  "Return the effective current-buffer binding of KEY-SEQUENCE."
+  (condition-case error-data
+      (let ((binding (key-binding (kbd key-sequence) t)))
+        (format
+         "Key: %s\nMajor mode: %s\nBinding: %s"
+         key-sequence
+         major-mode
+         (cond
+          ((null binding) "unbound")
+          ((symbolp binding) (symbol-name binding))
+          (t (prin1-to-string binding)))))
+    (error
+     (user-error "Invalid key sequence `%s': %s"
+                 key-sequence
+                 (error-message-string error-data)))))
 
 ;; Register lookup_key.
 (defvar boost-gptel-tool-lookup-key
   (gptel-make-tool
    :name "lookup_key"
    :description
-   "Return the command currently bound to a key sequence."
+   "Return the effective binding of a key sequence in the current buffer,
+taking its active local and minor-mode keymaps into account."
    :function #'boost-gptel--lookup-key
    :args (list '(:name "key_sequence"
                  :type string
@@ -633,7 +646,6 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
   "Create an Org note with TITLE and CONTENT in the configured note directory."
   (when (string-empty-p (string-trim title))
     (user-error "Note title must not be empty"))
-  (make-directory boost-gptel-note-directory t)
   (let* ((clean-title
           (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
          (stamp (format-time-string "%Y%m%d-%H%M%S"))
@@ -736,9 +748,17 @@ with the other file-management tools."
   (gptel-make-tool
    :name "list_files"
    :description
-   "List files inside the authorised root directory. By default only the top level; pass recursive=true to also list files in subdirectories (hidden directories such as .git are always skipped)."
-   :function (lambda (&optional recursive)
-               (mapconcat #'identity (boost-gptel--list-files recursive) "\n"))
+   "List files inside the authorised root directory. By default only the top
+level; pass recursive=true to also list files in subdirectories (hidden
+directories such as .git are always skipped)."
+   :function
+   (lambda (&optional recursive)
+     (boost-gptel--truncate-string
+      (mapconcat
+       #'identity
+       (boost-gptel--list-files recursive)
+       "\n")
+      boost-gptel-tool-max-output-chars))
    :args (list
           '(:name "recursive"
             :type boolean
@@ -807,16 +827,20 @@ with the other file-management tools."
                           boost-gptel-tool-max-search-files))
          (case-fold-search t)
          (matches nil)
-         (match-count 0))
+         (match-count 0)
+         (skipped-count 0))
     (catch 'enough-matches
       (dolist (project-file files)
         (let ((file (expand-file-name project-file root)))
           (condition-case nil
-              (when (and (file-in-directory-p (file-truename file) true-root)
+              (when (and (file-in-directory-p
+                          (file-truename file)
+                          true-root)
                          (not (boost-gptel--sensitive-file-p file))
                          (file-regular-p file)
                          (file-readable-p file)
-                         (< (file-attribute-size (file-attributes file))
+                         (< (file-attribute-size
+                             (file-attributes file))
                             1000000))
                 (with-temp-buffer
                   (insert-file-contents file)
@@ -825,12 +849,12 @@ with the other file-management tools."
                             (search-forward "\0" nil t))
                     (goto-char (point-min))
                     (while (search-forward query nil t)
-                      (let* ((line (line-number-at-pos))
-                             (text
-                              (string-trim
-                               (buffer-substring-no-properties
-                                (line-beginning-position)
-                                (line-end-position)))))
+                      (let ((line (line-number-at-pos))
+                            (text
+                             (string-trim
+                              (buffer-substring-no-properties
+                               (line-beginning-position)
+                               (line-end-position)))))
                         (push
                          (format "%s:%d: %s"
                                  (file-relative-name file root)
@@ -841,12 +865,17 @@ with the other file-management tools."
                         (when (>= match-count
                                   boost-gptel-tool-max-search-matches)
                           (throw 'enough-matches nil)))))))
-            (error nil)))))
-    (if matches
-        (boost-gptel--truncate-string
-         (string-join (nreverse matches) "\n")
-         boost-gptel-tool-max-output-chars)
-      "No matches found.")))
+            (error
+             (cl-incf skipped-count))))))
+    (let ((result
+           (if matches
+               (string-join (nreverse matches) "\n")
+             "No matches found.")))
+      (boost-gptel--truncate-string
+       (format "%s\n\nFiles skipped after errors: %d"
+               result
+               skipped-count)
+       boost-gptel-tool-max-output-chars))))
 
 ;; Register search_project_files.
 (defvar boost-gptel-tool-search-project-files
@@ -911,7 +940,6 @@ case-insensitive string and return file, line number, and matching line."
 (defun boost-gptel--write-file (path content &optional backup)
   (let* ((abs (boost-gptel--safe-path path))
          (backup (if (null backup) t backup)))
-    (make-directory (file-name-directory abs) t)
     (when (and backup (file-exists-p abs))
       (copy-file abs (concat abs ".bak") t))
     (with-temp-file abs
@@ -946,15 +974,28 @@ case-insensitive string and return file, line number, and matching line."
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
 
 (defun boost-gptel--run-shell-command (command)
-  "Run COMMAND from `boost-gptel-root' and return bounded output."
+  "Run COMMAND from `boost-gptel-root' and return its status and bounded output."
   (when (string-empty-p (string-trim command))
     (user-error "Command must not be empty"))
   (let ((default-directory
          (file-name-as-directory
           (expand-file-name boost-gptel-root))))
-    (boost-gptel--truncate-string
-     (shell-command-to-string command)
-     boost-gptel-tool-max-output-chars)))
+    (with-temp-buffer
+      (let ((status
+             (call-process shell-file-name
+                           nil
+                           (list t t)
+                           nil
+                           shell-command-switch
+                           command)))
+        (format
+         "Exit status: %s\n\n%s"
+         status
+         (boost-gptel--truncate-string
+          (buffer-substring-no-properties
+           (point-min)
+           (point-max))
+          boost-gptel-tool-max-output-chars))))))
 
 ;; Register run_shell_command.
 (defvar boost-gptel-tool-run-shell-command
@@ -973,16 +1014,6 @@ and return bounded combined output."
    :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
-
-(defun boost-gptel--pre-tool-policy (call)
-  "Apply additional policy to a GPTel tool CALL plist."
-  (let ((name (plist-get call :name)))
-    (cond
-     ((member name '("create_note"))
-      '(:confirm t))
-     (t nil))))
-
-(add-hook 'gptel-pre-tool-call-functions #'boost-gptel--pre-tool-policy)
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
@@ -1039,9 +1070,20 @@ and return bounded combined output."
 
 (gptel-make-preset 'boost-pair-programming
   :description
-  "Programming preset with an initial conversation template."
+  "Programming with read-only inspection and confirmed file replacement."
   :parents 'boost-coding
-  :system 'pair-programming)
+  :system 'pair-programming
+  :tools '("current_datetime"
+           "symbol_exists"
+           "function_documentation"
+           "lookup_key"
+           "read_buffer"
+           "list_project_files"
+           "search_project_files"
+           "read_project_file"
+           ;; "write_project_file"
+           )
+  :confirm-tool-calls 'auto)
 
 (gptel-make-preset 'boost-writing
   :description
