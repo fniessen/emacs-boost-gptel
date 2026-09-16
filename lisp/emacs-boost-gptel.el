@@ -87,7 +87,7 @@ This is a conservative example, not a complete secret-detection mechanism."
 (when (file-readable-p boost-gptel-private-file)
   (load boost-gptel-private-file nil 'nomessage))
 
-(defun boost--gptel-api-key-from-file (file)
+(defun boost-gptel--api-key-from-file (file)
   "Return a function that reads an API key from FILE."
   (lambda ()
     (unless (file-readable-p file)
@@ -147,7 +147,7 @@ second, redundant backend next to it."
   (require 'gptel-openai)
   (let ((backend (gptel-make-openai "OpenAI"
                    :stream t
-                   :key (boost--gptel-api-key-from-file "~/.openai_api_key"))))
+                   :key (boost-gptel--api-key-from-file "~/.openai_api_key"))))
     (unless (member boost-gptel-openai-model (gptel-backend-models backend))
       (user-error "Model %s is not available in GPTel's \"OpenAI\" backend"
                   boost-gptel-openai-model))
@@ -159,7 +159,7 @@ second, redundant backend next to it."
   (require 'gptel-anthropic)
   (let ((backend (gptel-make-anthropic "Anthropic"
                    :stream t
-                   :key (boost--gptel-api-key-from-file "~/.anthropic_api_key"))))
+                   :key (boost-gptel--api-key-from-file "~/.anthropic_api_key"))))
     (unless (cl-find boost-gptel-anthropic-model (gptel-backend-models backend)
                      :key (lambda (m) (if (consp m) (car m) m)))
       (user-error "[Model %s is not available in GPTel's \"Anthropic\" backend]"
@@ -172,7 +172,7 @@ second, redundant backend next to it."
 ;; ;; Default OpenAI model.
 ;; (setq gptel-openai-model "gpt-3.5-turbo")
 
-(defun boost-gptel-select-default-provider ()
+(defun boost-gptel--select-default-provider ()
   "Set the global GPTel backend and model from `boost-gptel-default-provider'."
   (pcase boost-gptel-default-provider
     ('current
@@ -192,7 +192,7 @@ second, redundant backend next to it."
         'boost-gptel
         "[Anthropic was selected as default but its backend is disabled.]")))))
 
-(boost-gptel-select-default-provider)
+(boost-gptel--select-default-provider)
 
 ;; Do not include the reasoning at all.
 (setq gptel-include-reasoning nil)
@@ -291,18 +291,18 @@ second, redundant backend next to it."
      "Return only the comment text.")
    "\n"))
 
-(defun boost-gptel-project-directive ()
+(defun boost-gptel--project-directive ()
   "Return a programming directive enriched with current Emacs context."
   (format
    "%s\n\nCurrent Emacs context:\n- Project: %s\n- Major mode: %s\n- File: %s"
    boost-gptel-prompt-programming
-   (boost-gptel-project-name)
+   (boost-gptel--project-name)
    major-mode
    (if buffer-file-name
        (abbreviate-file-name buffer-file-name)
      "no-file")))
 
-(defun boost-gptel-house-style-directive ()
+(defun boost-gptel--house-style-directive ()
   "Return the external house-style prompt or a safe built-in fallback."
   (boost-gptel-read-prompt-file
    "house-style"
@@ -325,14 +325,14 @@ second, redundant backend next to it."
       (cons 'research          boost-gptel-prompt-research)
       (cons 'summarize         boost-gptel-prompt-summarization)
       (cons 'emacser           boost-gptel-prompt-emacser)
-      (cons 'project-aware     #'boost-gptel-project-directive)
-      (cons 'house-style       #'boost-gptel-house-style-directive)
+      (cons 'project-aware     #'boost-gptel--project-directive)
+      (cons 'house-style       #'boost-gptel--house-style-directive)
       (cons 'pair-programming  boost-gptel-pair-programming-template)))
   (setf (alist-get (car entry) gptel-directives) (cdr entry)))
 
 (setq gptel-system-prompt (alist-get 'default gptel-directives))
 
-(defun boost-shell-rewrite-directive ()
+(defun boost-gptel--shell-rewrite-directive ()
   "Rewrite directive used in `shell-mode'."
   (when (derived-mode-p 'shell-mode)
     (concat
@@ -344,7 +344,7 @@ second, redundant backend next to it."
      "Preserve shell syntax, quoting, indentation, line breaks, and formatting. "
      "Return raw shell content only.")))
 
-(add-hook 'gptel-rewrite-directives-hook #'boost-shell-rewrite-directive)
+(add-hook 'gptel-rewrite-directives-hook #'boost-gptel--shell-rewrite-directive)
 
 (defcustom boost-gptel-project-context-files
   '("README.md" "README.org" "CONTRIBUTING.md" "AGENTS.md")
@@ -361,7 +361,7 @@ second, redundant backend next to it."
   "Add existing files from `boost-gptel-project-context-files' to local context."
   (interactive)
   (boost-gptel--ensure-local-context)
-  (let ((root (or (boost-gptel-project-root)
+  (let ((root (or (boost-gptel--project-root)
                   (user-error "No current project")))
         (added 0))
     (dolist (relative boost-gptel-project-context-files)
@@ -400,26 +400,26 @@ second, redundant backend next to it."
         abs
       (error "Forbidden path: %s" path))))
 
-(defun boost-gptel-project-root (&optional directory)
+(defun boost-gptel--project-root (&optional directory)
   "Return the current project root for DIRECTORY, or nil."
   (when-let* ((project (project-current nil directory)))
     (file-name-as-directory
      (expand-file-name (project-root project)))))
 
-(defun boost-gptel-project-name ()
+(defun boost-gptel--project-name ()
   "Return a short name for the current project."
-  (if-let* ((root (boost-gptel-project-root)))
+  (if-let* ((root (boost-gptel--project-root)))
       (file-name-nondirectory (directory-file-name root))
     "no-project"))
 
-(defun boost-gptel-sensitive-file-p (file)
+(defun boost-gptel--sensitive-file-p (file)
   "Return non-nil when FILE matches the configured sensitive path regexp."
   (let ((case-fold-search t))
     (string-match-p
      boost-gptel-sensitive-file-regexp
      (expand-file-name file))))
 
-(defun boost-gptel-sensitive-buffer-p (buffer)
+(defun boost-gptel--sensitive-buffer-p (buffer)
   "Return non-nil when BUFFER should not be exposed through a read tool."
   (if (not (buffer-live-p buffer))
       t
@@ -427,16 +427,16 @@ second, redundant backend next to it."
       (let ((case-fold-search t))
         (or (string-match-p boost-gptel-sensitive-buffer-regexp (buffer-name))
             (and buffer-file-name
-                 (boost-gptel-sensitive-file-p buffer-file-name)))))))
+                 (boost-gptel--sensitive-file-p buffer-file-name)))))))
 
-(defun boost-gptel-safe-project-file (relative-path)
+(defun boost-gptel--safe-project-file (relative-path)
   "Return an existing project file identified by RELATIVE-PATH.
 
 The resolved file must remain inside the current project, including after
 symbolic links are resolved."
   (when (file-name-absolute-p relative-path)
     (user-error "Expected a path relative to the current project"))
-  (let* ((root (or (boost-gptel-project-root)
+  (let* ((root (or (boost-gptel--project-root)
                    (user-error "No current project")))
          (candidate (expand-file-name relative-path root)))
     (unless (file-exists-p candidate)
@@ -445,12 +445,12 @@ symbolic links are resolved."
           (true-file (file-truename candidate)))
       (unless (file-in-directory-p true-file true-root)
         (user-error "Path escapes the current project: %s" relative-path))
-      (when (boost-gptel-sensitive-file-p true-file)
+      (when (boost-gptel--sensitive-file-p true-file)
         (user-error "Refusing to read a sensitive project path: %s"
                     relative-path))
       true-file)))
 
-(defun boost-gptel-truncate-string (text limit)
+(defun boost-gptel--truncate-string (text limit)
   "Return TEXT truncated to LIMIT characters with a clear marker."
   (if (<= (length text) limit)
       text
@@ -458,7 +458,7 @@ symbolic links are resolved."
      (substring text 0 limit)
      (format "\n\n[Output truncated after %d characters.]" limit))))
 
-(defun boost-gptel-buffer-substring-limited (beg end limit)
+(defun boost-gptel--buffer-substring-limited (beg end limit)
   "Return buffer text from BEG to END without copying more than LIMIT chars."
   (let* ((start (min beg end))
          (finish (max beg end))
@@ -470,7 +470,7 @@ symbolic links are resolved."
          (format "\n\n[Output truncated after %d characters.]" limit))
       text)))
 
-(defun boost-gptel-read-file-limited (file &optional limit)
+(defun boost-gptel--read-file-limited (file &optional limit)
   "Read FILE and return no more than LIMIT decoded characters.
 
 LIMIT defaults to `boost-gptel-tool-max-output-chars'."
@@ -485,11 +485,11 @@ LIMIT defaults to `boost-gptel-tool-max-output-chars'."
               (goto-char (point-min))
               (search-forward "\0" nil t))
         (user-error "Refusing to read a binary file: %s" file))
-      (boost-gptel-truncate-string
+      (boost-gptel--truncate-string
        (buffer-substring-no-properties (point-min) (point-max))
        max-chars))))
 
-(defun boost-gptel-read-prompt-file (name &optional fallback)
+(defun boost-gptel--read-prompt-file (name &optional fallback)
   "Read prompt NAME from `boost-gptel-prompt-directory'.
 
 NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
@@ -497,21 +497,20 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
                                 boost-gptel-prompt-directory)))
     (cond
      ((file-readable-p file)
-      (string-trim (boost-gptel-read-file-limited file 100000)))
+      (string-trim (boost-gptel--read-file-limited file 100000)))
      (fallback fallback)
      (t
       (user-error "Prompt file is not readable: %s" file)))))
 
-(defun boost-gptel-slugify (text)
+(defun boost-gptel--slugify (text)
   "Convert TEXT to a conservative lowercase file-name component."
   (let ((slug (downcase (string-trim text))))
     (setq slug (replace-regexp-in-string "[^[:alnum:]]+" "-" slug))
     (setq slug (replace-regexp-in-string "^-+\\|-+$" "" slug))
     (if (string-empty-p slug) "note" slug)))
 
-(defun boost-gptel-symbol-exists (symbol-name)
+(defun boost-gptel--symbol-exists (symbol-name)
   "Return non-nil if SYMBOL-NAME is defined in the current Emacs."
-
   (if (intern-soft symbol-name)
       "true"
     "false"))
@@ -521,20 +520,20 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
   (gptel-make-tool
    :name "symbol_exists"
    :description "Check whether an Emacs Lisp symbol exists."
-   :function #'boost-gptel-symbol-exists
+   :function #'boost-gptel--symbol-exists
    :args (list '(:name "symbol_name"
                  :type string
                  :description "Name of the symbol to check"))))
 
-(defun boost-gptel-read-buffer (buffer-name)
+(defun boost-gptel--read-buffer (buffer-name)
   "Return BUFFER-NAME contents, truncated to the configured limit."
   (let ((buffer (get-buffer buffer-name)))
     (unless buffer
       (user-error "No live buffer named %s" buffer-name))
-    (when (boost-gptel-sensitive-buffer-p buffer)
+    (when (boost-gptel--sensitive-buffer-p buffer)
       (user-error "Refusing to read a sensitive buffer: %s" buffer-name))
     (with-current-buffer buffer
-      (boost-gptel-buffer-substring-limited
+      (boost-gptel--buffer-substring-limited
        (point-min)
        (point-max)
        boost-gptel-tool-max-output-chars))))
@@ -545,7 +544,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "read_buffer"
    :description
    "Return the plain-text contents of a currently live Emacs buffer. Sensitive buffers are rejected, the result may be truncated, and the call requires confirmation."
-   :function #'boost-gptel-read-buffer
+   :function #'boost-gptel--read-buffer
    :args
    (list
     '(:name "buffer_name"
@@ -555,7 +554,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm t
    :include t))
 
-(defun boost-gptel-list-files ()
+(defun boost-gptel--list-files ()
   (seq-filter
    (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
    (directory-files boost-gptel-root nil "^[^.].*")))
@@ -567,7 +566,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "List files below the authorised root directory."
    :function (lambda ()
-               (mapconcat #'identity (boost-gptel-list-files) "\n"))
+               (mapconcat #'identity (boost-gptel--list-files) "\n"))
    :args nil
    :category "filesystem"
    :confirm nil
@@ -575,7 +574,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-files)
 
-(defun boost-gptel-list-project-files (&optional extension)
+(defun boost-gptel--list-project-files (&optional extension)
   "Return project-relative file names, optionally filtered by EXTENSION."
   (let* ((project (or (project-current nil)
                       (user-error "No current project")))
@@ -589,7 +588,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (setq files
           (seq-remove
            (lambda (file)
-             (boost-gptel-sensitive-file-p
+             (boost-gptel--sensitive-file-p
               (expand-file-name file root)))
            files))
     (when suffix
@@ -598,7 +597,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
              (lambda (file)
                (string-suffix-p suffix file t))
              files)))
-    (boost-gptel-truncate-string
+    (boost-gptel--truncate-string
      (string-join
       (mapcar (lambda (file) (file-relative-name file root)) files)
       "\n")
@@ -610,7 +609,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "list_project_files"
    :descriptiown
    "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
-   :function #'boost-gptel-list-project-files
+   :function #'boost-gptel--list-project-files
    :args
    (list
     '(:name "extension"
@@ -621,7 +620,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm nil
    :include t))
 
-(defun boost-gptel-search-project (query)
+(defun boost-gptel--search-project (query)
   "Search project files for literal string QUERY and return matching lines."
   (when (string-empty-p (string-trim query))
     (user-error "Search query must not be empty"))
@@ -639,7 +638,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
         (let ((file (expand-file-name project-file root)))
           (condition-case nil
               (when (and (file-in-directory-p (file-truename file) true-root)
-                         (not (boost-gptel-sensitive-file-p file))
+                         (not (boost-gptel--sensitive-file-p file))
                          (file-regular-p file)
                          (file-readable-p file)
                          (< (file-attribute-size (file-attributes file))
@@ -669,7 +668,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
                           (throw 'enough-matches nil)))))))
             (error nil)))))
     (if matches
-        (boost-gptel-truncate-string
+        (boost-gptel--truncate-string
          (string-join (nreverse matches) "\n")
          boost-gptel-tool-max-output-chars)
       "No matches found.")))
@@ -681,7 +680,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "search_project"
    :description
    "Search a bounded set of project text files for a literal, case-insensitive string and return file, line number, and matching line."
-   :function #'boost-gptel-search-project
+   :function #'boost-gptel--search-project
    :args
    (list
     '(:name "query"
@@ -691,7 +690,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm nil
    :include t))
 
-(defun boost-gptel-read-file (path)
+(defun boost-gptel--read-file (path)
   (let ((abs (boost-gptel--safe-path path)))
     (if (file-exists-p abs)
         (with-temp-buffer
@@ -705,7 +704,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "read_file"
    :description
    "Read a text file below the authorised root directory."
-   :function (lambda (path) (boost-gptel-read-file path))
+   :function (lambda (path) (boost-gptel--read-file path))
    :args
    (list
     '(:name "path"
@@ -717,10 +716,10 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-file)
 
-(defun boost-gptel-read-project-file (relative-path)
+(defun boost-gptel--read-project-file (relative-path)
   "Return the contents of project file RELATIVE-PATH."
-  (boost-gptel-read-file-limited
-   (boost-gptel-safe-project-file relative-path)))
+  (boost-gptel--read-file-limited
+   (boost-gptel--safe-project-file relative-path)))
 
 ;; Register read_project_file.
 (defvar boost-gptel-tool-read-project-file
@@ -728,7 +727,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "read_project_file"
    :description
    "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
-   :function #'boost-gptel-read-project-file
+   :function #'boost-gptel--read-project-file
    :args
    (list
     '(:name "relative_path"
@@ -738,7 +737,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm nil
    :include t))
 
-(defun boost-gptel-write-file (path content &optional backup)
+(defun boost-gptel--write-file (path content &optional backup)
   (let* ((abs (boost-gptel--safe-path path))
          (backup (if (null backup) t backup)))
     (make-directory (file-name-directory abs) t)
@@ -757,7 +756,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :description
    "Replace a text file below the authorised root directory."
    :function (lambda (path content &optional backup)
-               (boost-gptel-write-file path content backup))
+               (boost-gptel--write-file path content backup))
    :args
    (list
     '(:name "path"
@@ -779,7 +778,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
 
-(defun boost-gptel-current-datetime ()
+(defun boost-gptel--current-datetime ()
   "Return the current local date and time."
   (format-time-string "[%Y-%m-%d %a %H:%M]"))
 
@@ -789,13 +788,13 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "current_datetime"
    :description
    "Return the current local date, time, weekday, and numeric time-zone offset."
-   :function #'boost-gptel-current-datetime
+   :function #'boost-gptel--current-datetime
    :args nil
    :category "environment"
    :confirm nil
    :include t))
 
-(defun boost-gptel-create-note (title content)
+(defun boost-gptel--create-note (title content)
   "Create an Org note with TITLE and CONTENT in the configured note directory."
   (when (string-empty-p (string-trim title))
     (user-error "Note title must not be empty"))
@@ -805,7 +804,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
          (stamp (format-time-string "%Y%m%d-%H%M%S"))
          (slug
           (truncate-string-to-width
-           (boost-gptel-slugify clean-title)
+           (boost-gptel--slugify clean-title)
            60
            nil
            nil))
@@ -830,7 +829,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :name "create_note"
    :description
    "Create a new timestamped Org note inside the configured GPTel note directory. This tool cannot choose an arbitrary output path."
-   :function #'boost-gptel-create-note
+   :function #'boost-gptel--create-note
    :args
    (list
     '(:name "title"
@@ -843,7 +842,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :confirm t
    :include t))
 
-(defun boost-gptel-pre-tool-policy (call)
+(defun boost-gptel--pre-tool-policy (call)
   "Apply additional policy to a GPTel tool CALL plist."
   (let ((name (plist-get call :name)))
     (cond
@@ -851,14 +850,14 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
       '(:confirm t))
      (t nil))))
 
-(add-hook 'gptel-pre-tool-call-functions #'boost-gptel-pre-tool-policy)
+(add-hook 'gptel-pre-tool-call-functions #'boost-gptel--pre-tool-policy)
 
-(defun boost-gptel-post-tool-log (call)
+(defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
   (message "[GPTel tool completed: %s]" (plist-get call :name))
   nil)
 
-(add-hook 'gptel-post-tool-call-functions #'boost-gptel-post-tool-log)
+(add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
 
 (gptel-make-preset 'boost-base
   :description "Conservative defaults with no tools selected."
@@ -938,7 +937,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (cl-remove-if
      (lambda (buffer)
        (or (string-prefix-p " " (buffer-name buffer))
-           (boost-gptel-sensitive-buffer-p buffer)))
+           (boost-gptel--sensitive-buffer-p buffer)))
      (delete-dups (mapcar #'window-buffer (window-list)))))
   :use-context 'user)
 
@@ -1043,7 +1042,7 @@ Update the buffer-local `gptel-context' variable with the retained items."
      :weight bold))
   "GPTel assistant label.")
 
-(defun boost--gptel-font-lock ()
+(defun boost-gptel--font-lock ()
   (font-lock-add-keywords
    nil
    '(("^Prompt"
@@ -1052,7 +1051,7 @@ Update the buffer-local `gptel-context' variable with the retained items."
       (0 'boost-gptel-assistant-face prepend)))
    'append))
 
-(add-hook 'gptel-mode-hook #'boost--gptel-font-lock)
+(add-hook 'gptel-mode-hook #'boost-gptel--font-lock)
 
 (defun boost-gptel-open-chat ()
   "Switch to the GPTel chat buffer, creating it if it doesn't exist."
@@ -1086,23 +1085,21 @@ visual line.
 These overlays cover the terminating newline without modifying GPTel's
 `gptel' text property.")
 
-(defun boost--gptel-delete-response-tail-overlays (&optional beg end)
+(defun boost-gptel--delete-response-tail-overlays (&optional beg end)
   "Delete response-tail overlays intersecting BEG and END.
 
 BEG defaults to `point-min' and END defaults to `point-max'."
-
   (let ((beg (or beg (point-min)))
         (end (or end (point-max))))
     (dolist (overlay (overlays-in beg end))
       (when (overlay-get overlay 'boost-gptel-response-tail-overlay)
         (delete-overlay overlay))))
-
   ;; Remove references to overlays that no longer exist.
   (setq boost-gptel-response-tail-overlays
         (cl-delete-if-not #'overlay-buffer
                           boost-gptel-response-tail-overlays)))
 
-(defun boost--gptel-extend-response-background (beg end)
+(defun boost-gptel--extend-response-background (beg end)
   "Extend a GPTel response background from END to the next line.
 
 BEG and END are supplied by `gptel-post-response-functions'.
@@ -1116,7 +1113,7 @@ newline.  It deliberately does not add or modify the `gptel' text property."
 
   (when (and (< beg end)
              (< end (point-max)))
-    (boost--gptel-delete-response-tail-overlays
+    (boost-gptel--delete-response-tail-overlays
      end
      (min (1+ end) (point-max)))
 
@@ -1156,13 +1153,13 @@ newline.  It deliberately does not add or modify the `gptel' text property."
 ;; GPTel calls functions in this abnormal hook with the beginning and end
 ;; positions of the completed response.
 (add-hook 'gptel-post-response-functions
-          #'boost--gptel-extend-response-background
+          #'boost-gptel--extend-response-background
           90)
 
 (defvar-local boost-gptel-org-src-overlays nil
   "Overlays restoring Org source-block backgrounds over GPTel highlighting.")
 
-(defun boost--gptel-org-delete-src-overlays (&optional beg end)
+(defun boost-gptel--org-delete-src-overlays (&optional beg end)
   "Delete custom source-block overlays between BEG and END."
   (let ((beg (or beg (point-min)))
         (end (or end (point-max))))
@@ -1170,7 +1167,7 @@ newline.  It deliberately does not add or modify the `gptel' text property."
       (when (overlay-get overlay 'boost-gptel-org-src-overlay)
         (delete-overlay overlay)))))
 
-(defun boost--gptel-org-put-src-overlay (beg end face)
+(defun boost-gptel--org-put-src-overlay (beg end face)
   "Put a background-only overlay from BEG to END.
 
 FACE is used only to retrieve its background colour.  The overlay
@@ -1197,7 +1194,7 @@ font-lock faces remain visible inside Org source blocks."
 
       (push overlay boost-gptel-org-src-overlays))))
 
-(defun boost--gptel-org-src-property-regions (beg end)
+(defun boost-gptel--org-src-property-regions (beg end)
   "Return contiguous regions carrying the `src-block' property."
   (let ((position beg)
         regions)
@@ -1215,19 +1212,19 @@ font-lock faces remain visible inside Org source blocks."
                   end))))
     (nreverse regions)))
 
-(defun boost--gptel-org-refresh-src-backgrounds (beg end)
+(defun boost-gptel--org-refresh-src-backgrounds (beg end)
   "Restore Org source-block backgrounds in GPTel response BEG to END."
   (when (derived-mode-p 'org-mode)
     ;; Org must create `src-block' text properties before we inspect them.
     (font-lock-flush beg end)
     (font-lock-ensure beg end)
 
-    (boost--gptel-org-delete-src-overlays beg end)
+    (boost-gptel--org-delete-src-overlays beg end)
 
     ;; Code contents, identified by Org's own `src-block' property.
     (dolist (region
-             (boost--gptel-org-src-property-regions beg end))
-      (boost--gptel-org-put-src-overlay
+             (boost-gptel--org-src-property-regions beg end))
+      (boost-gptel--org-put-src-overlay
        (car region)
        (cdr region)
        'org-block))
@@ -1239,7 +1236,7 @@ font-lock faces remain visible inside Org source blocks."
       (while (re-search-forward
               "^[ \t]*#\\+begin_src\\(?:[ \t].*\\)?$"
               end t)
-        (boost--gptel-org-put-src-overlay
+        (boost-gptel--org-put-src-overlay
          (line-beginning-position)
          (min (1+ (line-end-position)) end)
          'org-block-begin-line))
@@ -1249,21 +1246,21 @@ font-lock faces remain visible inside Org source blocks."
       (while (re-search-forward
               "^[ \t]*#\\+end_src[ \t]*$"
               end t)
-        (boost--gptel-org-put-src-overlay
+        (boost-gptel--org-put-src-overlay
          (line-beginning-position)
          (min (1+ (line-end-position)) end)
          'org-block-end-line)))))
 
 (add-hook 'gptel-post-response-functions
-          #'boost--gptel-org-refresh-src-backgrounds
+          #'boost-gptel--org-refresh-src-backgrounds
           95)
 
-(defun boost-gptel-chat-mode-setup ()
+(defun boost-gptel--chat-mode-setup ()
   "Configure presentation in buffers managed by `gptel-mode'."
   (visual-line-mode 1)
   (gptel-highlight-mode 1))
 
-(add-hook 'gptel-mode-hook #'boost-gptel-chat-mode-setup)
+(add-hook 'gptel-mode-hook #'boost-gptel--chat-mode-setup)
 
 ;; Convenient chat sending (in GPTel conversation buffers).
 (keymap-set gptel-mode-map "C-c C-c" #'gptel-send)
@@ -1280,7 +1277,7 @@ font-lock faces remain visible inside Org source blocks."
 ;; Keep the streaming response visible.
 (add-hook 'gptel-post-stream-hook #'gptel-auto-scroll)
 
-(defun boost--gptel-scroll-to-end-of-response (_beg _end)
+(defun boost-gptel--scroll-to-end-of-response (_beg _end)
   "Move point to the end of the dedicated *gptel* buffer.
 
 Do nothing when the GPTel response belongs to another buffer."
@@ -1291,10 +1288,10 @@ Do nothing when the GPTel response belongs to another buffer."
         (set-window-point window pos)))))
 
 (add-hook 'gptel-post-response-functions
-          #'boost--gptel-scroll-to-end-of-response
+          #'boost-gptel--scroll-to-end-of-response
           90)
 
-(defun boost-gptel-after-response (beg end)
+(defun boost-gptel--after-response (beg end)
   "Run lightweight UI actions after a response from BEG to END."
   (when (> end beg)
     (when boost-gptel-move-point-after-response
@@ -1303,7 +1300,7 @@ Do nothing when the GPTel response belongs to another buffer."
              (- end beg)
              (if (= (- end beg) 1) "" "s"))))
 
-(add-hook 'gptel-post-response-functions #'boost-gptel-after-response 100)
+(add-hook 'gptel-post-response-functions #'boost-gptel--after-response 100)
 
 (defun boost-gptel-clear-buffer ()
   "Clear the current GPTel chat buffer and insert a fresh prompt."
@@ -1345,7 +1342,7 @@ Do nothing when the GPTel response belongs to another buffer."
 (define-key gptel-mode-map (kbd "M-n")
             #'boost-gptel-next-prompt)
 
-(defun boost-gptel-directive (name)
+(defun boost-gptel--directive (name)
   "Return directive NAME or signal a user-facing error."
   (or (alist-get name gptel-directives)
       (user-error "Unknown GPTel directive: %s" name)))
@@ -1371,11 +1368,11 @@ Do nothing when the GPTel response belongs to another buffer."
          ((eq response 'abort)
           (insert "\nRequest aborted.\n")))))))
 
-(defun boost-gptel-result-callback (buffer)
+(defun boost-gptel--result-callback (buffer)
   "Return a callback that writes GPTel events into BUFFER."
   (apply-partially #'boost-gptel--write-result buffer))
 
-(defun boost-gptel-request-in-new-buffer (title prompt directive)
+(defun boost-gptel--request-in-new-buffer (title prompt directive)
   "Send PROMPT with DIRECTIVE and display the result under TITLE."
   (let* ((buffer (generate-new-buffer (format "*gptel: %s*" title)))
          (backend gptel-backend)
@@ -1398,9 +1395,9 @@ Do nothing when the GPTel response belongs to another buffer."
     (display-buffer buffer)
     (gptel-request
         prompt
-      :system (boost-gptel-directive directive)
+      :system (boost-gptel--directive directive)
       :stream nil
-      :callback (boost-gptel-result-callback buffer))
+      :callback (boost-gptel--result-callback buffer))
     buffer))
 
 (defun boost-gptel-explain-region (beg end)
@@ -1409,11 +1406,11 @@ Do nothing when the GPTel response belongs to another buffer."
   (unless beg
     (user-error "Select a region first"))
   (let ((source
-         (boost-gptel-buffer-substring-limited
+         (boost-gptel--buffer-substring-limited
           beg
           end
           boost-gptel-command-max-input-chars)))
-    (boost-gptel-request-in-new-buffer
+    (boost-gptel--request-in-new-buffer
      "Region explanation"
      (format
       (concat
@@ -1427,11 +1424,11 @@ Do nothing when the GPTel response belongs to another buffer."
   "Summarize the current buffer in a new Org buffer."
   (interactive)
   (let ((source
-         (boost-gptel-buffer-substring-limited
+         (boost-gptel--buffer-substring-limited
           (point-min)
           (point-max)
           boost-gptel-command-max-input-chars)))
-    (boost-gptel-request-in-new-buffer
+    (boost-gptel--request-in-new-buffer
      (format "Summary of %s" (buffer-name))
      (format "Summarize the following source faithfully.\n\n%s" source)
      'summarize)))
@@ -1456,11 +1453,11 @@ Do nothing when the GPTel response belongs to another buffer."
                          "English")) ;; Default.
      (user-error "Select a region first")))
   (let ((source
-         (boost-gptel-buffer-substring-limited
+         (boost-gptel--buffer-substring-limited
           beg
           end
           boost-gptel-command-max-input-chars)))
-    (boost-gptel-request-in-new-buffer
+    (boost-gptel--request-in-new-buffer
      (format "Translation to %s" target-language)
      (string-join
       (list
