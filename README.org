@@ -1975,31 +1975,31 @@ document hierarchy.
 Recommended configuration:
 
 #+begin_src emacs-lisp
-(setf (alist-get 'org-mode gptel-prompt-prefix-alist) "Prompt ")
-(setf (alist-get 'org-mode gptel-response-prefix-alist) "Response\n\n")
+(setf (alist-get 'org-mode gptel-prompt-prefix-alist) " prompt  ")
+(setf (alist-get 'org-mode gptel-response-prefix-alist) " response \n\n")
 
 (defface boost-gptel-user-face
   '((t
-     :background "#c7d9a7"
-     :foreground "black"
-     :box (:line-width 1 :color "#8ea35c")
+     :background "#E8E8E8"
+     :foreground "#000000"
+     :box (:line-width 1 :color "#000000")
      :weight bold))
   "GPTel user label.")
 
 (defface boost-gptel-assistant-face
   '((t
-     :background "#a9d6d2"
-     :foreground "black"
-     :box (:line-width 1 :color "#5f9ea0")
+     :background "#4A90E2"
+     :foreground "#FFFFFF"
+     :box (:line-width 1 :color "#000000")
      :weight bold))
   "GPTel assistant label.")
 
 (defun boost-gptel--font-lock ()
   (font-lock-add-keywords
    nil
-   '(("^Prompt"
+   '(("^ prompt "
       (0 'boost-gptel-user-face prepend))
-     ("^Response"
+     ("^ response "
       (0 'boost-gptel-assistant-face prepend)))
    'append))
 
