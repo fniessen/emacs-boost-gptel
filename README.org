@@ -10,20 +10,21 @@
 #+OPTIONS:   toc:3 num:t
 #+PROPERTY:  header-args:emacs-lisp :tangle lisp/emacs-boost-gptel.el :mkdirp yes :results silent
 
-Multiple Backends, Dynamic Discovery, Rewrite and Chat
-https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/
+* Useful links
 
-Tous les LLM dans Emacs, avec gptel
-https://www.youtube.com/watch?v=bsRnh_brggM
+** [[https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/][Multiple Backends, Dynamic Discovery, Rewrite and Chat]]
 
-Shorten Org task titles to ≤67 chars
-prompts/shorten.txt from https://github.com/jwiegley/dot-emacs
+** [[https://www.youtube.com/watch?v=bsRnh_brggM][Tous les LLM dans Emacs, avec gptel]]
 
-Generate concise action-oriented titles
-prompts/title.txt from https://github.com/jwiegley/dot-emacs
+** [[prompts/shorten.txt from https://github.com/jwiegley/dot-emacs][Shorten Org task titles to ≤67 chars]]
 
-Plan/execute actions
-https://github.com/dolmens/gptel-aibo
+** [[prompts/title.txt from https://github.com/jwiegley/dot-emacs][Generate concise action-oriented titles]]
+
+** [[https://github.com/dolmens/gptel-aibo][Plan/execute actions]]
+
+** STRT [[https://www.youtube.com/watch?v=Hkih7jaqOnE][Agentic LLM use in Emacs using Model Context Protocol (MCP)]]
+
+** DONE [[https://www.youtube.com/watch?v=n_NZk3hDl6I][MCP for Emacs - Improve your notes with ORG MODE]]
 
 * About this configuration
 
