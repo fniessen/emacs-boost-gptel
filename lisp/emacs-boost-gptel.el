@@ -1116,43 +1116,6 @@ case-insensitive string and return file, line number, and matching line."
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-project-file)
 
-(defun boost-gptel--write-file (path content &optional backup)
-  (let* ((abs (boost-gptel--safe-path path))
-         (backup (if (null backup) t backup)))
-    (when (and backup (file-exists-p abs))
-      (copy-file abs (concat abs ".bak") t))
-    (with-temp-file abs
-      (insert content))
-    (format "Wrote %d bytes to %s"
-            (string-bytes content)
-            (file-relative-name abs boost-gptel-root))))
-
-;; Register write_file.
-(defvar boost-gptel-tool-write-file
-  (gptel-make-tool
-   :name "write_file"
-   :description
-   "Replace a text file below the authorised root directory."
-   :function
-   (lambda (path content &optional backup)
-     (boost-gptel--write-file path content backup))
-   :args (list
-          '(:name "path"
-            :type string
-            :description "Relative file path, for example 'todo.org'")
-          '(:name "content"
-            :type string
-            :description "Complete replacement content of the file")
-          '(:name "backup"
-            :type boolean
-            :description "Create a .bak copy before replacing an existing file (default: true)"
-            :optional t))
-   :category "File Management"
-   :confirm t
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-write-file)
-
 (defun boost-gptel--edit-file (file-path content)
   "Overwrite the file at FILE-PATH with CONTENT. Return a success message or error."
   (condition-case err
