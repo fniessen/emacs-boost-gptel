@@ -591,6 +591,36 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
 
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 
+(defun boost-gptel--variable-documentation (var-name)
+  "Return the documentation string for the variable named VAR-NAME."
+  (condition-case err
+      (let* ((sym (intern var-name))
+             (doc (when (boundp sym)
+                    (or (documentation-property sym 'variable-documentation)
+                        (documentation sym))))
+             (result (or doc
+                         (format "No documentation found for variable ‘%s’." var-name))))
+        result)
+    (error
+     (format "Error: %s" (error-message-string err)))))
+
+;; Register variable_documentation.
+(defvar boost-gptel-tool-variable-documentation
+  (gptel-make-tool
+   :name "variable_documentation"
+   :description
+   "Return the documentation string for a given Emacs variable."
+   :function #'boost-gptel--variable-documentation
+   :args (list
+          '(:name "var_name"
+            :type string
+            :description "Name of the variable"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-variable-documentation)
+
 (defun boost-gptel--lookup-key (key-sequence)
   "Return the effective current-buffer binding of KEY-SEQUENCE."
   (condition-case error-data
@@ -623,6 +653,114 @@ taking its active local and minor-mode keymaps into account."
    :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
+
+(defun boost-gptel--list-packages ()
+  "Return a printed list of all installed package names."
+  (let ((pkgs (mapcar (lambda (pkg) (symbol-name (car pkg)))
+                      package-alist)))
+    (prin1-to-string pkgs)))
+
+;; Register list_packages.
+(defvar boost-gptel-tool-list-packages
+  (gptel-make-tool
+   :name "list_packages"
+   :description "Return the list of all installed Emacs packages."
+   :function #'boost-gptel--list-packages
+   :args nil
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-list-packages)
+
+(defun boost-gptel--package-installed (pkg-name)
+  "Return t if the package named PKG-NAME is installed, nil otherwise."
+  (condition-case err
+      (let ((sym (intern pkg-name)))
+        (if (package-installed-p sym)
+            "t"
+          "nil"))
+    (error
+     (format "Error: %s" (error-message-string err)))))
+
+;; Register package_installed.
+(defvar boost-gptel-tool-package-installed
+  (gptel-make-tool
+   :name "package_installed"
+   :description "Return t if a given Emacs package is installed."
+   :function #'boost-gptel--package-installed
+   :args (list
+          '(:name "pkg_name"
+            :type string
+            :description "Name of the package to check"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-package-installed)
+
+(defun boost-gptel--current-major-mode ()
+  "Return the current buffer’s major mode as a string."
+  (prin1-to-string major-mode))
+
+;; Register current_major_mode.
+(defvar boost-gptel-tool-current-major-mode
+  (gptel-make-tool
+   :name "current_major_mode"
+   :description
+   "Return the current buffer’s major mode."
+   :function #'boost-gptel--current-major-mode
+   :args nil
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-current-major-mode)
+
+(defun boost-gptel--list-buffers ()
+  "Return a printed list of all currently open buffer names."
+  (let ((names (mapcar #'buffer-name (buffer-list))))
+    (prin1-to-string names)))
+
+;; Register list_buffers.
+(defvar boost-gptel-tool-list-buffers
+  (gptel-make-tool
+   :name "list_buffers"
+   :description
+   "Return the list of all open Emacs buffer names."
+   :function #'boost-gptel--list-buffers
+   :args nil
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-list-buffers)
+
+(defun boost-gptel--evaluate-elisp (code)
+  "Evaluate the Emacs Lisp string CODE and return its printed result or an error."
+  (condition-case err
+      (let* ((form   (read code))
+             (result (eval form t)))
+        (prin1-to-string result))
+    (error
+     (format "Error: %s" (error-message-string err)))))
+
+;; Register evaluate_elisp.
+(defvar boost-gptel-tool-evaluate-elisp
+  (gptel-make-tool
+   :name "evaluate_elisp"
+   :description
+   "Evaluate a piece of Emacs Lisp code and return its result as a string."
+   :function #'boost-gptel--evaluate-elisp
+   :args (list
+          '(:name "code"
+            :type string
+            :description "Emacs Lisp code to evaluate"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-evaluate-elisp)
 
 (defun boost-gptel--current-datetime ()
   "Return the current local date and time."
@@ -771,6 +909,32 @@ directories such as .git are always skipped)."
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-project-files)
 
+(defun boost-gptel--search-files (pattern)
+  "Return a printed list of files under the project root whose contents match PATTERN using ripgrep."
+  (let* ((proj (and (fboundp 'project-current) (project-current)))
+         (root (if proj (project-root proj) default-directory))
+         (cmd  (format "rg --files-with-matches --no-heading --color never -e %s %s"
+                       (shell-quote-argument pattern)
+                       (shell-quote-argument root)))
+         (output (shell-command-to-string cmd))
+         (files  (split-string output "\n" t)))
+    (prin1-to-string files)))
+
+;; Register search_files (ripgrep).
+(defvar boost-gptel-tool-search-files
+  (gptel-make-tool
+   :name "search_files"
+   :description
+   "Search file contents under the project root using ripgrep and return matching file paths."
+   :function #'boost-gptel--search-files
+   :args (list
+          '(:name "pattern"
+            :type string
+            :description "Regex or pattern to search for in file contents"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
 (defun boost-gptel--search-project-files (query)
   "Search project files for literal string QUERY and return matching lines."
   (when (string-empty-p (string-trim query))
@@ -904,9 +1068,9 @@ case-insensitive string and return file, line number, and matching line."
       (copy-file abs (concat abs ".bak") t))
     (with-temp-file abs
       (insert content))
-    (format "Wrote %s (%d bytes)"
-            (file-relative-name abs boost-gptel-root)
-            (string-bytes content))))
+    (format "Wrote %d bytes to %s"
+            (string-bytes content)
+            (file-relative-name abs boost-gptel-root))))
 
 ;; Register write_file.
 (defvar boost-gptel-tool-write-file
@@ -932,6 +1096,138 @@ case-insensitive string and return file, line number, and matching line."
    :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
+
+(defun boost-gptel--edit-file (file-path content)
+  "Overwrite the file at FILE-PATH with CONTENT. Return a success message or error."
+  (condition-case err
+      (let* ((absolute (expand-file-name file-path
+                                        (if (fboundp 'project-root)
+                                            (project-root (project-current))
+                                          default-directory)))
+             (dir      (file-name-directory absolute)))
+        (unless (file-directory-p dir)
+          (make-directory dir t))
+        (with-temp-file absolute
+          (insert content))
+        (format "Wrote %d bytes to %s" (string-bytes content) absolute))
+    (error
+     (format "Error editing file %s: %s" file-path (error-message-string err)))))
+
+;; Register edit_file.
+(defvar boost-gptel-tool-edit-file
+  (gptel-make-tool
+   :name "edit_file"
+   :description
+   "Overwrite a file under the project root with given content."
+   :function #'boost-gptel--edit-file
+   :args (list
+          '(:name "file_path" :type string
+            :description "Relative path to the file to edit")
+          '(:name "content"   :type string
+            :description "New content for the file"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-edit-file)
+
+(defun boost-gptel--rename-file (old-path new-path)
+  "Rename file OLD-PATH to NEW-PATH under the project root, creating directories
+if needed."
+  (condition-case err
+      (let* ((root (if (fboundp 'project-current)
+                       (project-root (project-current))
+                     default-directory))
+             (old (expand-file-name old-path root))
+             (new (expand-file-name new-path root))
+             (new-dir (file-name-directory new)))
+        (unless (file-directory-p new-dir)
+          (make-directory new-dir t))
+        (rename-file old new t)  ; t = overwrite if exists.
+        (format "Renamed %s to %s" old new))
+    (error
+     (format "Error renaming %s to %s: %s"
+             old-path new-path (error-message-string err)))))
+
+(defvar boost-gptel-tool-rename-file
+  (gptel-make-tool
+   :name "rename_file"
+   :description "Rename a file under the project root."
+   :function #'boost-gptel--rename-file
+   :args (list
+          '(:name "old_path" :type string
+            :description "Relative path of the file to rename")
+          '(:name "new_path" :type string
+            :description "New relative path for the file"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-rename-file)
+
+(defun boost-gptel--delete-file (file-path)
+  "Delete the file at FILE-PATH under the project root."
+  (condition-case err
+      (let* ((proj-root (if (and (fboundp 'project-current)
+                                 (project-current))
+                            (project-root (project-current))
+                          default-directory))
+             (abs (expand-file-name file-path proj-root)))
+        (unless (file-exists-p abs)
+          (error "File does not exist: %s" file-path))
+        (delete-file abs)
+        (format "Deleted file: %s" abs))
+    (error
+     (format "Error deleting file %s: %s"
+             file-path (error-message-string err)))))
+
+;; Register delete_file.
+(defvar boost-gptel-tool-delete-file
+  (gptel-make-tool
+   :name "delete_file"
+   :description
+   "Delete a file under the project root."
+   :function #'boost-gptel--delete-file
+   :args (list
+          '(:name "file_path" :type string
+            :description "Relative path to the file to delete"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-delete-file)
+
+(defun boost-gptel--create-directory (dir-path)
+  "Create the directory DIR-PATH under the project root, including parents.
+Return a success or error message."
+  (condition-case err
+      (let* ((proj-root (if (and (fboundp 'project-current)
+                                 (project-current))
+                            (project-root (project-current))
+                          default-directory))
+             (abs       (expand-file-name dir-path proj-root)))
+        (make-directory abs t)
+        (format "Created directory: %s" abs))
+    (error
+     (format "Error creating directory %s: %s"
+             dir-path
+             (error-message-string err)))))
+
+;; Register create_directory.
+(defvar boost-gptel-tool-create-directory
+  (gptel-make-tool
+   :name "create_directory"
+   :description "Create a directory (and parents) under the project root."
+   :function #'boost-gptel--create-directory
+   :args (list
+          '(:name "dir_path"
+            :type string
+            :description "Relative directory path to create"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-create-directory)
 
 (defun boost-gptel--run-shell-command (command)
   "Run COMMAND from `boost-gptel-root' and return its status and bounded output."
@@ -975,13 +1271,129 @@ and return bounded combined output."
 
 (add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
 
+(defun boost-gptel--search-web (query)
+  "Search the web for QUERY using DuckDuckGo Instant Answer API and return the JSON response."
+  (condition-case err
+      (let* ((cmd (format "curl --silent --get --data-urlencode 'q=%s' 'https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1'"
+                         (shell-quote-argument query)))
+             (output (shell-command-to-string cmd)))
+        output)
+    (error
+     (format "Error performing web search: %s" (error-message-string err)))))
+
+;; Register search_web.
+(defvar boost-gptel-tool-search-web
+  (gptel-make-tool
+   :name "search_web"
+   :description "Search the web for QUERY via DuckDuckGo Instant Answer API and return JSON."
+   :function #'boost-gptel--search-web
+   :args (list
+          '(:name "query"
+            :type string
+            :description "Search query"))
+   :category "Web Tools"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-search-web)
+
+(defun boost-gptel--read-webpage (url)
+  "Fetch the content at URL synchronously and return its body as a string."
+  (condition-case err
+      (let ((buf (url-retrieve-synchronously url t t 10)))
+        (unless (bufferp buf)
+          (error "Failed to retrieve URL: %s" url))
+        (with-current-buffer buf
+          (goto-char (point-min))
+          ;; Skip HTTP headers
+          (re-search-forward "\\(?\\n\\)\\{2,\\}" nil 'move)
+          (let ((body (buffer-substring-no-properties (point) (point-max))))
+            (kill-buffer buf)
+            body)))
+    (error (format "Error fetching %s: %s" url (error-message-string err)))))
+
+;; Register read_webpage.
+(defvar boost-gptel-tool-read-webpage
+  (gptel-make-tool
+   :name "read_webpage"
+   :description
+   "Fetch the content of a webpage at URL and return its body as a string."
+   :function #'boost-gptel--read-webpage
+   :args (list
+          '(:name "url"
+            :type string
+            :description "The URL of the webpage to read"))
+   :category "Web Tools"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-webpage)
+
+(defun boost-gptel--org-list-tasks ()
+  "Return a printed list of all TODO headings in the current Org buffer."
+  (require 'org)
+  (let (tasks)
+    (org-element-map (org-element-parse-buffer) 'headline
+      (lambda (hl)
+        (when-let* ((todo (org-element-property :todo-keyword hl))
+                    (title (org-element-property :raw-value hl)))
+          (push (format \"%s: %s\" todo title) tasks))))
+    (prin1-to-string (nreverse tasks))))
+
+;; Register org_list_tasks.
+(defvar boost-gptel-tool-org-list-tasks
+  (gptel-make-tool
+   :name "org_list_tasks"
+   :description
+   "List all TODO entries in the current Org buffer."
+   :function #'boost-gptel--org-list-tasks
+   :args nil
+   :category "Org-mode"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-org-list-tasks)
+
+(defun boost-gptel--org-find-tasks (pattern)
+  "Return a printed list of TODO headings in the current Org buffer whose titles match PATTERN."
+  (require 'org)
+  (let (matches)
+    (org-element-map (org-element-parse-buffer) 'headline
+      (lambda (hl)
+        (when (and (org-element-property :todo-keyword hl)
+                   (string-match-p pattern
+                                   (org-element-property :raw-value hl)))
+          (push
+           (format \"%s: %s\"
+                   (org-element-property :todo-keyword hl)
+                   (org-element-property :raw-value hl))
+           matches))))
+    (prin1-to-string (nreverse matches))))
+
+;; Register org_find_tasks.
+(defvar boost-gptel-tool-org-find-tasks
+  (gptel-make-tool
+   :name "org_find_tasks"
+   :description
+   "List TODO entries in the current Org buffer whose titles match a given regexp."
+   :function #'boost-gptel--org-find-tasks
+   :args (list
+          '(:name "pattern"
+            :type string
+            :description "Regexp to filter task titles"))
+   :category "Org-mode"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-org-find-tasks)
+
 (defun boost-gptel--create-note (title content)
   "Create an Org note with TITLE and CONTENT in the configured note directory."
   (when (string-empty-p (string-trim title))
     (user-error "Note title must not be empty"))
   (let* ((clean-title
           (replace-regexp-in-string "[\r\n]+" " " (string-trim title)))
-         (stamp (format-time-string "%Y%m%d-%H%M%S"))
+         (stamp (format-time-string "%Y-%m-%d-%a-%H-%M"))
          (slug
           (truncate-string-to-width
            (boost-gptel--slugify clean-title)
@@ -1022,6 +1434,37 @@ and return bounded combined output."
    :include nil))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-note)
+
+(defun boost-gptel--org-delete-task (pattern)
+  "Delete the first TODO heading in the current Org buffer whose title matches PATTERN."
+  (require 'org)
+  (save-excursion
+    (goto-char (point-min))
+    (if (re-search-forward
+         (format "^\\*+\\s-+TODO\\s-+.*%s.*" pattern)
+         nil t)
+        (progn
+          (org-cut-subtree)
+          (save-buffer)
+          (format "Deleted TODO heading matching '%s'." pattern))
+      (format "No TODO heading matching '%s' found." pattern))))
+
+;; Register org_delete_task.
+(defvar boost-gptel-tool-org-delete-task
+  (gptel-make-tool
+   :name "org_delete_task"
+   :description
+   "Delete the first TODO entry in the current Org buffer matching a given regexp."
+   :function #'boost-gptel--org-delete-task
+   :args (list
+          '(:name "pattern"
+            :type string
+            :description "Regexp to match task title"))
+   :category "Org-mode"
+   :confirm nil
+   :include nil))
+
+(add-to-list 'gptel-tools boost-gptel-tool-org-delete-task)
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
