@@ -210,8 +210,8 @@
     (let ((msg (boost-gptel--create-note "Test Note" "Content line")))
       (should (string-match-p "Created note:" msg))
       ;; file should exist
-      (let ((files (directory-files boost-gptel-note-directory nil "Test-Note.*\\\\.org$")))
-        (should (member (car files) files))))))
+      (let* ((files (directory-files boost-gptel-note-directory nil ".*-test-note-.*\\.org$")))
+        (should files)))))
 
 (provide 'gptel-tools-test)
 
