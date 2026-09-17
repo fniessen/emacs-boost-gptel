@@ -736,7 +736,7 @@ taking its active local and minor-mode keymaps into account."
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-buffers)
 
-(defun boost-gptel--evaluate-elisp (code)
+(defun boost-gptel--eval-elisp (code)
   "Evaluate the Emacs Lisp string CODE and return its printed result or an error."
   (condition-case err
       (let* ((form   (read code))
@@ -745,13 +745,13 @@ taking its active local and minor-mode keymaps into account."
     (error
      (format "Error: %s" (error-message-string err)))))
 
-;; Register evaluate_elisp.
-(defvar boost-gptel-tool-evaluate-elisp
+;; Register eval_elisp.
+(defvar boost-gptel-tool-eval-elisp
   (gptel-make-tool
-   :name "evaluate_elisp"
+   :name "eval_elisp"
    :description
    "Evaluate a piece of Emacs Lisp code and return its result as a string."
-   :function #'boost-gptel--evaluate-elisp
+   :function #'boost-gptel--eval-elisp
    :args (list
           '(:name "code"
             :type string
@@ -760,7 +760,7 @@ taking its active local and minor-mode keymaps into account."
    :confirm nil
    :include nil))
 
-(add-to-list 'gptel-tools boost-gptel-tool-evaluate-elisp)
+(add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
 
 (defun boost-gptel--current-datetime ()
   "Return the current local date and time."
