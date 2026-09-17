@@ -26,6 +26,18 @@
 
 ** DONE [[https://www.youtube.com/watch?v=n_NZk3hDl6I][MCP for Emacs - Improve your notes with ORG MODE]]
 
+** [[https://www.linkhub.dk/emacs-ai-coding-workflows-gptel-claude-ellama-and-beyond][Emacs AI Coding Workflows: GPTel, Claude, Ellama, and Beyond]]
+
+- codeium.el or copilot.el for always-on inline completions as you type
+- GPTel + Claude for on-demand chat, code generation, and extended reasoning —
+  with Org mode integration for persistent conversation history
+- Ellama + Ollama for fast, private, offline routine tasks with a menu of
+  ready-made commands
+- aidermacs for multi-file agentic edits and large refactors, with ediff review
+  and Architect Mode
+
+** [[https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/][LLMs in Emacs: My Actual gptel Setup]]
+
 * About this configuration
 
 This file shows an example literate GPTel config. Read it top to bottom--
@@ -1190,6 +1202,60 @@ taking its active local and minor-mode keymaps into account."
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
 #+end_src
+
+(gptel-make-tool
+ :name "Eval"
+ :function
+ (lambda (expression)
+   (let ((standard-output (generate-new-buffer " *gptel-agent-eval-elisp*"))
+         (result nil) (output nil))
+     (unwind-protect
+         (condition-case err
+             (progn
+               (setq result (eval (read expression) t))
+               (when (> (buffer-size standard-output) 0)
+                 (setq output (with-current-buffer standard-output (buffer-string))))
+               (concat
+                (format "Result:\n%S" result)
+                (and output (format "\n\nSTDOUT:\n%s" output))))
+           ((error user-error)
+            (concat
+             (format "Error: eval failed with error %S: %S"
+                     (car err) (cdr err))
+             (and output (format "\n\nSTDOUT:\n%s" output)))))
+       (kill-buffer standard-output))))
+ :description "Evaluate Elisp EXPRESSION and return result and any printed output.
+
+EXPRESSION can be anything to evaluate.  It can be a function call, a
+variable, a quasi-quoted expression.  The only requirement is that only
+the first sexp will be read and evaluated, so if you need to evaluate
+multiple expressions, make one call per expression.  Do not combine
+expressions using progn etc.  Just go expression by expression and try
+to make standalone single expressions.
+
+Instead of saying \"I can't calculate that\" etc, use this tool to
+evaluate the result.
+
+The return value is formated to a string using %S, so a string will be
+returned as an escaped embedded string and literal forms will be
+compatible with `read' where possible.  Some forms have no printed
+representation that can be read and will be represented with
+#<hash-notation> instead.
+
+Output from `print`, `prin1`, and `princ` is captured and returned as STDOUT.
+Use `print` for diagnostic output, not `message` (which goes to *Messages* buffer
+and is not captured).
+
+You can use this to quickly change a user setting, check a variable, or
+demonstrate something to the user."
+ :args '(( :name "expression"
+           :type string
+           :description "A single elisp sexp to evaluate."))
+ :category "gptel-agent"
+ :confirm t
+ :include t)
+
+(from https://github.com/karthink/gptel-agent/blob/master/gptel-agent-tools.el)
 
 *** current_datetime
 
