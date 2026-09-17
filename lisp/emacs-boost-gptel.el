@@ -533,6 +533,24 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (setq slug (replace-regexp-in-string "^-+\\|-+$" "" slug))
     (if (string-empty-p slug) "note" slug)))
 
+(defun boost-gptel--emacs-version ()
+  "Return the current Emacs version string."
+  (emacs-version))
+
+;; Register emacs_version.
+(defvar boost-gptel-tool-emacs-version
+  (gptel-make-tool
+   :name "emacs_version"
+   :description
+   "Return the current Emacs version."
+   :function #'boost-gptel--emacs-version
+   :args nil
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-emacs-version)
+
 (defun boost-gptel--symbol-exists (symbol-name)
   "Return whether SYMBOL-NAME is interned in the current Emacs."
   (if (intern-soft symbol-name)
@@ -549,8 +567,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "symbol_name"
                  :type string
                  :description "Name of the symbol to check"))
-   :category "Emacs Runtime"
-   :include nil))
+   :category "Emacs Runtime"   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
 
@@ -586,8 +603,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "function_name"
                  :type string
                  :description "Name of the function"))
-   :category "Emacs Runtime"
-   :include nil))
+   :category "Emacs Runtime"   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 
@@ -617,7 +633,7 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
             :description "Name of the variable"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-variable-documentation)
 
@@ -649,8 +665,7 @@ taking its active local and minor-mode keymaps into account."
    :args (list '(:name "key_sequence"
                  :type string
                  :description "Key sequence such as C-x C-f or C-c m R"))
-   :category "Emacs Runtime"
-   :include nil))
+   :category "Emacs Runtime"   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
 
@@ -669,17 +684,17 @@ taking its active local and minor-mode keymaps into account."
    :args nil
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-packages)
 
 (defun boost-gptel--package-installed (pkg-name)
-  "Return t if the package named PKG-NAME is installed, nil otherwise."
+  "Return \"true\" if the package named PKG-NAME is installed, \"false\" otherwise."
   (condition-case err
       (let ((sym (intern pkg-name)))
         (if (package-installed-p sym)
-            "t"
-          "nil"))
+            "true"
+          "false"))
     (error
      (format "Error: %s" (error-message-string err)))))
 
@@ -687,7 +702,8 @@ taking its active local and minor-mode keymaps into account."
 (defvar boost-gptel-tool-package-installed
   (gptel-make-tool
    :name "package_installed"
-   :description "Return t if a given Emacs package is installed."
+   :description
+   "Return “true” if a given Emacs package is installed, “false” otherwise."
    :function #'boost-gptel--package-installed
    :args (list
           '(:name "pkg_name"
@@ -695,7 +711,7 @@ taking its active local and minor-mode keymaps into account."
             :description "Name of the package to check"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-package-installed)
 
@@ -713,7 +729,7 @@ taking its active local and minor-mode keymaps into account."
    :args nil
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-current-major-mode)
 
@@ -732,7 +748,7 @@ taking its active local and minor-mode keymaps into account."
    :args nil
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-buffers)
 
@@ -758,9 +774,44 @@ taking its active local and minor-mode keymaps into account."
             :description "Emacs Lisp code to evaluate"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
+
+(defun boost-gptel--eval-elisp-sandbox (code)
+  "Evaluate the Emacs Lisp string CODE in a fresh Emacs process (-Q, --batch)
+and return its printed result or an error message."
+  (let* ((wrapped
+          ;; Wrap CODE so we catch errors, convert to string, and explicitly print.
+          (format
+           "(princ (condition-case err
+                       (prin1-to-string (progn %s))
+                     (error
+                       (format \"Error: %%s\" (error-message-string err)))))"
+           code))
+         (cmd
+          (format "emacs -Q --batch --eval %s"
+                  (shell-quote-argument wrapped)))
+         (output (shell-command-to-string cmd)))
+    ;; Trim trailing newline and return.
+    (string-trim-right output)))
+
+;; Register eval_elisp_sandbox.
+(defvar boost-gptel-tool-eval-elisp-sandbox
+  (gptel-make-tool
+   :name "eval_elisp_sandbox"
+   :description
+   "Evaluate a single Elisp sexp in a clean Emacs --batch -Q session and return its printed result."
+   :function #'boost-gptel--eval-elisp-sandbox
+   :args (list
+          '(:name "code"
+            :type string
+            :description "A single elisp sexp to evaluate"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-eval-elisp-sandbox)
 
 (defun boost-gptel--current-datetime ()
   "Return the current local date and time."
@@ -776,7 +827,7 @@ taking its active local and minor-mode keymaps into account."
    :args nil
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-current-datetime)
 
@@ -807,7 +858,7 @@ Sensitive buffers are rejected and long results are truncated."
             :description "Name of the Emacs buffer to read"))
    :category "Buffer Access"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-buffer)
 
@@ -858,7 +909,7 @@ directories such as .git are always skipped)."
             :optional t))
    :category "File Management"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-files)
 
@@ -905,7 +956,7 @@ directories such as .git are always skipped)."
             :optional t))
    :category "File Management"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-list-project-files)
 
@@ -933,7 +984,9 @@ directories such as .git are always skipped)."
             :description "Regex or pattern to search for in file contents"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-search-files)
 
 (defun boost-gptel--search-project-files (query)
   "Search project files for literal string QUERY and return matching lines."
@@ -1011,7 +1064,7 @@ case-insensitive string and return file, line number, and matching line."
             :description "Non-empty literal text to search for"))
    :category "File Management"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-search-project-files)
 
@@ -1028,14 +1081,16 @@ case-insensitive string and return file, line number, and matching line."
    :name "read_file"
    :description
    "Read a text file below the authorised root directory."
-   :function (lambda (path) (boost-gptel--read-file path))
+   :function
+   (lambda (path)
+     (boost-gptel--read-file path))
    :args (list
           '(:name "path"
             :type string
             :description "Relative file path, for example 'todo.org'"))
    :category "File Management"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-file)
 
@@ -1057,7 +1112,7 @@ case-insensitive string and return file, line number, and matching line."
             :description "Path relative to the current project root"))
    :category "File Management"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-project-file)
 
@@ -1078,8 +1133,9 @@ case-insensitive string and return file, line number, and matching line."
    :name "write_file"
    :description
    "Replace a text file below the authorised root directory."
-   :function (lambda (path content &optional backup)
-               (boost-gptel--write-file path content backup))
+   :function
+   (lambda (path content &optional backup)
+     (boost-gptel--write-file path content backup))
    :args (list
           '(:name "path"
             :type string
@@ -1093,7 +1149,7 @@ case-insensitive string and return file, line number, and matching line."
             :optional t))
    :category "File Management"
    :confirm t
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-write-file)
 
@@ -1127,7 +1183,7 @@ case-insensitive string and return file, line number, and matching line."
             :description "New content for the file"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-edit-file)
 
@@ -1161,7 +1217,7 @@ if needed."
             :description "New relative path for the file"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-rename-file)
 
@@ -1193,7 +1249,7 @@ if needed."
             :description "Relative path to the file to delete"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-delete-file)
 
@@ -1225,7 +1281,7 @@ Return a success or error message."
             :description "Relative directory path to create"))
    :category "Emacs Runtime"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-directory)
 
@@ -1265,11 +1321,41 @@ and return bounded combined output."
           '(:name "command"
             :type string
             :description "Exact shell command to execute"))
-   :category "Command Execution"
+   :category "Shell"
    :confirm t
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
+
+(defun boost-gptel--man-page (topic)
+  "Return the man-page for TOPIC, with formatting removed."
+  (unless (and (stringp topic)
+               (not (string-empty-p (string-trim topic))))
+    (user-error "Man page topic must be a non-empty string"))
+  (condition-case err
+      (shell-command-to-string
+       (format "man %s | col -b"
+               (shell-quote-argument (string-trim topic))))
+    (error
+     (format "Error retrieving man page for %s: %s"
+             topic
+             (error-message-string err)))))
+
+;; Register man_page.
+(defvar boost-gptel-tool-man-page
+  (gptel-make-tool
+   :name "man_page"
+   :description "Fetch the Unix man page for a given command or topic."
+   :function #'boost-gptel--man-page
+   :args (list
+          '(:name "topic"
+            :type string
+            :description "Command or function name to look up"))
+   :category "Shell"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-man-page)
 
 (defun boost-gptel--search-web (query)
   "Search the web for QUERY using DuckDuckGo Instant Answer API and return the JSON response."
@@ -1293,7 +1379,7 @@ and return bounded combined output."
             :description "Search query"))
    :category "Web Tools"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-search-web)
 
@@ -1325,7 +1411,7 @@ and return bounded combined output."
             :description "The URL of the webpage to read"))
    :category "Web Tools"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-webpage)
 
@@ -1337,7 +1423,7 @@ and return bounded combined output."
       (lambda (hl)
         (when-let* ((todo (org-element-property :todo-keyword hl))
                     (title (org-element-property :raw-value hl)))
-          (push (format \"%s: %s\" todo title) tasks))))
+          (push (format "%s: %s" todo title) tasks))))
     (prin1-to-string (nreverse tasks))))
 
 ;; Register org_list_tasks.
@@ -1350,7 +1436,7 @@ and return bounded combined output."
    :args nil
    :category "Org-mode"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-list-tasks)
 
@@ -1364,7 +1450,7 @@ and return bounded combined output."
                    (string-match-p pattern
                                    (org-element-property :raw-value hl)))
           (push
-           (format \"%s: %s\"
+           (format "%s: %s"
                    (org-element-property :todo-keyword hl)
                    (org-element-property :raw-value hl))
            matches))))
@@ -1383,7 +1469,7 @@ and return bounded combined output."
             :description "Regexp to filter task titles"))
    :category "Org-mode"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-find-tasks)
 
@@ -1431,7 +1517,7 @@ and return bounded combined output."
             :description "Complete Org-formatted note content"))
    :category "Org-mode"
    :confirm t
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-note)
 
@@ -1462,7 +1548,7 @@ and return bounded combined output."
             :description "Regexp to match task title"))
    :category "Org-mode"
    :confirm nil
-   :include nil))
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-delete-task)
 
