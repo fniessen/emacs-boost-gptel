@@ -2,9 +2,9 @@
 
 ;; This file is generated to test each GPTel tool defined in emacs-boost-gptel.
 
-;; 1. Rechargez votre fichier de tests :
+;; 1. Reload your test file:
 ;;    M-x load-file RET tests/gptel-tools-test.el RET
-;; 2. Then run :
+;; 2. Then run:
 ;;    M-x ert RET t RET
 
 (require 'ert)
