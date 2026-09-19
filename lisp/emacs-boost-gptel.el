@@ -679,7 +679,8 @@ taking its active local and minor-mode keymaps into account."
 (defvar boost-gptel-tool-list-packages
   (gptel-make-tool
    :name "list_packages"
-   :description "Return the list of all installed Emacs packages."
+   :description
+   "Return the list of all installed Emacs packages."
    :function #'boost-gptel--list-packages
    :args nil
    :category "Emacs Runtime"
@@ -1119,10 +1120,12 @@ case-insensitive string and return file, line number, and matching line."
 (defun boost-gptel--edit-file (file-path content)
   "Overwrite the file at FILE-PATH with CONTENT. Return a success message or error."
   (condition-case err
-      (let* ((absolute (expand-file-name file-path
-                                        (if (fboundp 'project-root)
-                                            (project-root (project-current))
-                                          default-directory)))
+      (let* (;; determine root: use project if any, else default-directory
+             (root (if (and (fboundp 'project-current)
+                            (project-current))
+                       (project-root (project-current))
+                     default-directory))
+             (absolute (expand-file-name file-path root))
              (dir      (file-name-directory absolute)))
         (unless (file-directory-p dir)
           (make-directory dir t))
@@ -1154,7 +1157,9 @@ case-insensitive string and return file, line number, and matching line."
   "Rename file OLD-PATH to NEW-PATH under the project root, creating directories
 if needed."
   (condition-case err
-      (let* ((root (if (fboundp 'project-current)
+      (let* (;; choose project root or fallback
+             (root (if (and (fboundp 'project-current)
+                            (project-current))
                        (project-root (project-current))
                      default-directory))
              (old (expand-file-name old-path root))
@@ -1380,13 +1385,11 @@ and return bounded combined output."
 
 (defun boost-gptel--org-list-tasks ()
   "Return a printed list of all TODO headings in the current Org buffer."
-  (require 'org)
   (let (tasks)
-    (org-element-map (org-element-parse-buffer) 'headline
-      (lambda (hl)
-        (when-let* ((todo (org-element-property :todo-keyword hl))
-                    (title (org-element-property :raw-value hl)))
-          (push (format "%s: %s" todo title) tasks))))
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward "^\\*+\\s-+TODO\\s-+\\(.*\\)$" nil t)
+        (push (format "TODO: %s" (match-string 1)) tasks)))
     (prin1-to-string (nreverse tasks))))
 
 ;; Register org_list_tasks.
@@ -1419,6 +1422,17 @@ and return bounded combined output."
            matches))))
     (prin1-to-string (nreverse matches))))
 
+(defun boost-gptel--org-find-tasks (pattern)
+  "Return a printed list of TODO headings whose title matches PATTERN."
+  (let (matches)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward
+              (format "^\\*+\\s-+TODO\\s-+\\(.*%s.*\\)$" pattern)
+              nil t)
+        (push (format "TODO: %s" (match-string 1)) matches)))
+    (prin1-to-string (nreverse matches))))
+
 ;; Register org_find_tasks.
 (defvar boost-gptel-tool-org-find-tasks
   (gptel-make-tool
@@ -1428,8 +1442,8 @@ and return bounded combined output."
    :function #'boost-gptel--org-find-tasks
    :args (list
           '(:name "pattern"
-            :type string
-            :description "Regexp to filter task titles"))
+                  :type string
+                  :description "Regexp to filter task titles"))
    :category "Org-mode"
    :confirm nil
    :include t))
