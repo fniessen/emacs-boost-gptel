@@ -739,14 +739,39 @@ expressions before enabling these tools in sensitive environments.
 
 ** Tool collection
 
-| Tool                 | Category     | Reads Data | Writes Data | Confirmation |
-|----------------------+--------------+------------+-------------+--------------|
-| =current_datetime=     | environment  | no         | no          | no           |
-| =read_buffer=          | emacs-read   | yes        | no          | always       |
-| =list_project_files=   | project-read | yes        | no          | no           |
-| =read_project_file=    | project-read | yes        | no          | no           |
-| =search_project_files= | project-read | yes        | no          | no           |
-| =create_note=          | notes-write  | no         | yes         | always       |
+| Tool                   | Category        | Reads Data   | Writes Data  | Confirmation |
+|------------------------+-----------------+--------------+--------------+--------------|
+| =emacs_version=          | Emacs Runtime   | no           | no           | no           |
+| =symbol_exists=          | Emacs Runtime   | yes          | no           | no           |
+| =function_documentation= | Emacs Runtime   | yes          | no           | no           |
+| =variable_documentation= | Emacs Runtime   | yes          | no           | no           |
+| =lookup_key=             | Emacs Runtime   | yes          | no           | no           |
+| =list_packages=          | Emacs Runtime   | yes          | no           | no           |
+| =package_installed=      | Emacs Runtime   | yes          | no           | no           |
+| =current_major_mode=     | Emacs Runtime   | yes          | no           | no           |
+| =list_buffers=           | Emacs Runtime   | yes          | no           | no           |
+| =eval_elisp=             | Emacs Runtime   | unrestricted | unrestricted | always       |
+| =eval_elisp_sandbox=     | Emacs Runtime   | unrestricted | unrestricted | always       |
+| =current_datetime=       | Emacs Runtime   | no           | no           | no           |
+| =read_buffer=            | Buffer Access   | yes          | no           | no           |
+| =list_files=             | File Management | yes          | no           | no           |
+| =list_project_files=     | File Management | yes          | no           | no           |
+| =search_files=           | Emacs Runtime   | yes          | no           | no           |
+| =search_project_files=   | File Management | yes          | no           | no           |
+| =read_file=              | File Management | yes          | no           | no           |
+| =read_project_file=      | File Management | yes          | no           | no           |
+| =edit_file=              | Emacs Runtime   | yes          | yes          | always       |
+| =rename_file=            | Emacs Runtime   | yes          | yes          | always       |
+| =delete_file=            | Emacs Runtime   | yes          | yes          | always       |
+| =create_directory=       | Emacs Runtime   | yes          | yes          | always       |
+| =run_shell_command=      | Shell           | unrestricted | unrestricted | always       |
+| =man_page=               | Shell           | yes          | no           | no           |
+| =search_web=             | Web Tools       | yes          | no           | no           |
+| =read_webpage=           | Web Tools       | yes          | no           | no           |
+| =org_list_tasks=         | Org-mode        | yes          | no           | no           |
+| =org_find_tasks=         | Org-mode        | yes          | no           | no           |
+| =create_note=            | Org-mode        | no           | yes          | no           |
+| =org_delete_task=        | Org-mode        | yes          | yes          | no           |
 
 ** Helpers
 
@@ -984,7 +1009,9 @@ See [[https://github.com/karthink/gptel/discussions/1093#discussioncomment-14728
    :args (list '(:name "symbol_name"
                  :type string
                  :description "Name of the symbol to check"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
 #+end_src
@@ -1024,7 +1051,9 @@ See [[https://github.com/karthink/gptel/discussions/1093#discussioncomment-14728
    :args (list '(:name "function_name"
                  :type string
                  :description "Name of the function"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 #+end_src
@@ -1094,7 +1123,9 @@ taking its active local and minor-mode keymaps into account."
    :args (list '(:name "key_sequence"
                  :type string
                  :description "Key sequence such as C-x C-f or C-c m R"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
 #+end_src
@@ -1223,14 +1254,14 @@ taking its active local and minor-mode keymaps into account."
             :type string
             :description "Emacs Lisp code to evaluate"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
 #+end_src
 
 (gptel-make-tool
- :name "Eval"
+ :name "eval_elisp"
  :function
  (lambda (expression)
    (let ((standard-output (generate-new-buffer " *gptel-agent-eval-elisp*"))
@@ -1277,7 +1308,7 @@ demonstrate something to the user."
  :args '(( :name "expression"
            :type string
            :description "A single elisp sexp to evaluate."))
- :category "gptel-agent"
+ :category "Emacs Runtime"
  :confirm t
  :include t)
 
@@ -1320,7 +1351,7 @@ and return its printed result or an error message."
             :type string
             :description "A single elisp sexp to evaluate"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp-sandbox)
@@ -1720,7 +1751,7 @@ case-insensitive string and return file, line number, and matching line."
           '(:name "content"   :type string
             :description "New content for the file"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-edit-file)
@@ -1762,7 +1793,7 @@ if needed."
           '(:name "new_path" :type string
             :description "New relative path for the file"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-rename-file)
@@ -1798,7 +1829,7 @@ if needed."
           '(:name "file_path" :type string
             :description "Relative path to the file to delete"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-delete-file)
@@ -1834,7 +1865,7 @@ Return a success or error message."
             :type string
             :description "Relative directory path to create"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-directory)
@@ -2132,7 +2163,7 @@ This is the only write tool in the example.  It can write only inside
             :type string
             :description "Complete Org-formatted note content"))
    :category "Org-mode"
-   :confirm t
+   :confirm nil
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-note)

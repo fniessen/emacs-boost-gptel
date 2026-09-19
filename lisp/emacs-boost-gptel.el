@@ -567,7 +567,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "symbol_name"
                  :type string
                  :description "Name of the symbol to check"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
 
@@ -603,7 +605,9 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
    :args (list '(:name "function_name"
                  :type string
                  :description "Name of the function"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
 
@@ -665,7 +669,9 @@ taking its active local and minor-mode keymaps into account."
    :args (list '(:name "key_sequence"
                  :type string
                  :description "Key sequence such as C-x C-f or C-c m R"))
-   :category "Emacs Runtime"   :include t))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-lookup-key)
 
@@ -774,7 +780,7 @@ taking its active local and minor-mode keymaps into account."
             :type string
             :description "Emacs Lisp code to evaluate"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
@@ -809,7 +815,7 @@ and return its printed result or an error message."
             :type string
             :description "A single elisp sexp to evaluate"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-eval-elisp-sandbox)
@@ -1148,7 +1154,7 @@ case-insensitive string and return file, line number, and matching line."
           '(:name "content"   :type string
             :description "New content for the file"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-edit-file)
@@ -1184,7 +1190,7 @@ if needed."
           '(:name "new_path" :type string
             :description "New relative path for the file"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-rename-file)
@@ -1216,7 +1222,7 @@ if needed."
           '(:name "file_path" :type string
             :description "Relative path to the file to delete"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-delete-file)
@@ -1248,7 +1254,7 @@ Return a success or error message."
             :type string
             :description "Relative directory path to create"))
    :category "Emacs Runtime"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-directory)
@@ -1493,7 +1499,7 @@ and return bounded combined output."
             :type string
             :description "Complete Org-formatted note content"))
    :category "Org-mode"
-   :confirm t
+   :confirm nil
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-note)
