@@ -796,39 +796,23 @@ expressions before enabling these tools in sensitive environments.
 
 ** Tool collection
 
-| Tool                   | Category        | Reads Data   | Writes Data  | Confirmation |
-|------------------------+-----------------+--------------+--------------+--------------|
-| =emacs_version=          | Emacs Runtime   | no           | no           | no           |
-| =symbol_exists=          | Emacs Runtime   | yes          | no           | no           |
-| =function_documentation= | Emacs Runtime   | yes          | no           | no           |
-| =variable_documentation= | Emacs Runtime   | yes          | no           | no           |
-| =lookup_key=             | Emacs Runtime   | yes          | no           | no           |
-| =list_packages=          | Emacs Runtime   | yes          | no           | no           |
-| =package_installed=      | Emacs Runtime   | yes          | no           | no           |
-| =current_major_mode=     | Emacs Runtime   | yes          | no           | no           |
-| =list_buffers=           | Emacs Runtime   | yes          | no           | no           |
-| =eval_elisp=             | Emacs Runtime   | unrestricted | unrestricted | always       |
-| =eval_elisp_sandbox=     | Emacs Runtime   | unrestricted | unrestricted | always       |
-| =current_datetime=       | Emacs Runtime   | no           | no           | no           |
-| =read_buffer=            | Buffer Access   | yes          | no           | no           |
-| =list_files=             | File Management | yes          | no           | no           |
-| =list_project_files=     | File Management | yes          | no           | no           |
-| =search_files=           | Emacs Runtime   | yes          | no           | no           |
-| =search_project_files=   | File Management | yes          | no           | no           |
-| =read_file=              | File Management | yes          | no           | no           |
-| =read_project_file=      | File Management | yes          | no           | no           |
-| =edit_file=              | Emacs Runtime   | yes          | yes          | always       |
-| =rename_file=            | Emacs Runtime   | yes          | yes          | always       |
-| =delete_file=            | Emacs Runtime   | yes          | yes          | always       |
-| =create_directory=       | Emacs Runtime   | yes          | yes          | always       |
-| =run_shell_command=      | Shell           | unrestricted | unrestricted | always       |
-| =man_page=               | Shell           | yes          | no           | no           |
-| =search_web=             | Web Tools       | yes          | no           | no           |
-| =read_webpage=           | Web Tools       | yes          | no           | no           |
-| =org_list_tasks=         | Org-mode        | yes          | no           | no           |
-| =org_find_tasks=         | Org-mode        | yes          | no           | no           |
-| =create_note=            | Org-mode        | no           | yes          | no           |
-| =org_delete_task=        | Org-mode        | yes          | yes          | no           |
+| Tool               | Category      | Reads Data   | Writes Data  | Confirmation |
+|--------------------+---------------+--------------+--------------+--------------|
+| =emacs_version=      | Emacs Runtime | no           | no           | no           |
+| =lookup_key=         | Emacs Runtime | yes          | no           | no           |
+| =list_packages=      | Emacs Runtime | yes          | no           | no           |
+| =package_installed=  | Emacs Runtime | yes          | no           | no           |
+| =current_major_mode= | Emacs Runtime | yes          | no           | no           |
+| =list_buffers=       | Emacs Runtime | yes          | no           | no           |
+| =eval_elisp_sandbox= | Emacs Runtime | unrestricted | unrestricted | always       |
+| =current_datetime=   | Emacs Runtime | no           | no           | no           |
+| =read_buffer=        | Buffer Access | yes          | no           | no           |
+| =rename_file=        | Filesystem    | yes          | yes          | always       |
+| =delete_file=        | Filesystem    | yes          | yes          | always       |
+| =org_list_tasks=     | Org-mode      | yes          | no           | no           |
+| =org_find_tasks=     | Org-mode      | yes          | no           | no           |
+| =create_note=        | Org-mode      | no           | yes          | no           |
+| =org_delete_task=    | Org-mode      | yes          | yes          | no           |
 
 ** Helpers
 
@@ -851,39 +835,6 @@ not sandbox commands executed by `run_shell_command'."
   :group 'boost-gptel)
 
 (make-directory boost-gptel-root t)
-
-(defun boost-gptel--safe-path (path)
-  "Return a safe absolute file name below `boost-gptel-root'.
-
-PATH must be relative.  Existing symbolic links in the path must not resolve
-outside the authorised root.  Signal an error for directories and sensitive
-paths."
-  (unless (and (stringp path)
-               (not (string-empty-p path)))
-    (user-error "Path must be a non-empty string"))
-  (when (file-name-absolute-p path)
-    (user-error "Expected a path relative to the authorised root"))
-  (let* ((root
-          (file-name-as-directory
-           (file-truename boost-gptel-root)))
-         (expanded
-          (expand-file-name path root))
-         (parent
-          (file-name-directory expanded))
-         (true-parent
-          (file-name-as-directory
-           (file-truename parent)))
-         (resolved
-          (expand-file-name
-           (file-name-nondirectory expanded)
-           true-parent)))
-    (unless (file-in-directory-p resolved root)
-      (user-error "Path escapes the authorised root: %s" path))
-    (when (file-directory-p resolved)
-      (user-error "Expected a file path, not a directory: %s" path))
-    (when (boost-gptel--sensitive-file-p resolved)
-      (user-error "Refusing access to a sensitive path: %s" path))
-    resolved))
 #+end_src
 
 #+begin_src emacs-lisp
@@ -1047,108 +998,6 @@ See [[https://github.com/karthink/gptel/discussions/1093#discussioncomment-14728
 (add-to-list 'gptel-tools boost-gptel-tool-emacs-version)
 #+end_src
 
-*** symbol_exists
-
-#+begin_src emacs-lisp
-(defun boost-gptel--symbol-exists (symbol-name)
-  "Return whether SYMBOL-NAME is interned in the current Emacs."
-  (if (intern-soft symbol-name)
-      "true"
-    "false"))
-
-;; Register symbol_exists.
-(defvar boost-gptel-tool-symbol-exists
-  (gptel-make-tool
-   :name "symbol_exists"
-   :description
-   "Check whether a symbol name is interned in the current Emacs session."
-   :function #'boost-gptel--symbol-exists
-   :args (list '(:name "symbol_name"
-                 :type string
-                 :description "Name of the symbol to check"))
-   :category "Emacs Runtime"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
-#+end_src
-
-*** function_documentation
-
-#+begin_src emacs-lisp
-(defun boost-gptel--function-documentation (function-name)
-  "Return runtime documentation and source location for FUNCTION-NAME."
-  (let ((symbol (intern-soft function-name)))
-    (cond
-     ((null symbol)
-      (format "Function `%s' does not exist." function-name))
-     ((not (fboundp symbol))
-      (format "`%s' is interned but is not defined as a function."
-              function-name))
-     (t
-      (string-join
-       (delq nil
-             (list
-              (format "Function: %s" function-name)
-              (when-let* ((file (symbol-file symbol 'defun)))
-                (format "Defined in: %s"
-                        (abbreviate-file-name file)))
-              ""
-              (or (documentation symbol t)
-                  "No documentation is available.")))
-       "\n")))))
-
-;; Register function_documentation.
-(defvar boost-gptel-tool-function-documentation
-  (gptel-make-tool
-   :name "function_documentation"
-   :description
-   "Return the documentation string of an Emacs Lisp function."
-   :function #'boost-gptel--function-documentation
-   :args (list '(:name "function_name"
-                 :type string
-                 :description "Name of the function"))
-   :category "Emacs Runtime"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
-#+end_src
-
-*** variable_documentation
-
-#+begin_src emacs-lisp
-(defun boost-gptel--variable-documentation (var-name)
-  "Return the documentation string for the variable named VAR-NAME."
-  (condition-case err
-      (let* ((sym (intern var-name))
-             (doc (when (boundp sym)
-                    (or (documentation-property sym 'variable-documentation)
-                        (documentation sym))))
-             (result (or doc
-                         (format "No documentation found for variable ‘%s’." var-name))))
-        result)
-    (error
-     (format "Error: %s" (error-message-string err)))))
-
-;; Register variable_documentation.
-(defvar boost-gptel-tool-variable-documentation
-  (gptel-make-tool
-   :name "variable_documentation"
-   :description
-   "Return the documentation string for a given Emacs variable."
-   :function #'boost-gptel--variable-documentation
-   :args (list
-          '(:name "var_name"
-            :type string
-            :description "Name of the variable"))
-   :category "Emacs Runtime"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-variable-documentation)
-#+end_src
-
 *** lookup_key
 
 #+begin_src emacs-lisp
@@ -1287,90 +1136,6 @@ taking its active local and minor-mode keymaps into account."
 (add-to-list 'gptel-tools boost-gptel-tool-list-buffers)
 #+end_src
 
-*** eval_elisp
-
-#+begin_src emacs-lisp
-(defun boost-gptel--eval-elisp (code)
-  "Evaluate the Emacs Lisp string CODE and return its printed result or an error."
-  (condition-case err
-      (let* ((form   (read code))
-             (result (eval form t)))
-        (prin1-to-string result))
-    (error
-     (format "Error: %s" (error-message-string err)))))
-
-;; Register eval_elisp.
-(defvar boost-gptel-tool-eval-elisp
-  (gptel-make-tool
-   :name "eval_elisp"
-   :description
-   "Evaluate a piece of Emacs Lisp code and return its result as a string."
-   :function #'boost-gptel--eval-elisp
-   :args (list
-          '(:name "code"
-            :type string
-            :description "Emacs Lisp code to evaluate"))
-   :category "Emacs Runtime"
-   :confirm t
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-eval-elisp)
-#+end_src
-
-(gptel-make-tool
- :name "eval_elisp"
- :function
- (lambda (expression)
-   (let ((standard-output (generate-new-buffer " *gptel-agent-eval-elisp*"))
-         (result nil) (output nil))
-     (unwind-protect
-         (condition-case err
-             (progn
-               (setq result (eval (read expression) t))
-               (when (> (buffer-size standard-output) 0)
-                 (setq output (with-current-buffer standard-output (buffer-string))))
-               (concat
-                (format "Result:\n%S" result)
-                (and output (format "\n\nSTDOUT:\n%s" output))))
-           ((error user-error)
-            (concat
-             (format "Error: eval failed with error %S: %S"
-                     (car err) (cdr err))
-             (and output (format "\n\nSTDOUT:\n%s" output)))))
-       (kill-buffer standard-output))))
- :description "Evaluate Elisp EXPRESSION and return result and any printed output.
-
-EXPRESSION can be anything to evaluate.  It can be a function call, a
-variable, a quasi-quoted expression.  The only requirement is that only
-the first sexp will be read and evaluated, so if you need to evaluate
-multiple expressions, make one call per expression.  Do not combine
-expressions using progn etc.  Just go expression by expression and try
-to make standalone single expressions.
-
-Instead of saying \"I can't calculate that\" etc, use this tool to
-evaluate the result.
-
-The return value is formated to a string using %S, so a string will be
-returned as an escaped embedded string and literal forms will be
-compatible with `read' where possible.  Some forms have no printed
-representation that can be read and will be represented with
-#<hash-notation> instead.
-
-Output from `print`, `prin1`, and `princ` is captured and returned as STDOUT.
-Use `print` for diagnostic output, not `message` (which goes to *Messages* buffer
-and is not captured).
-
-You can use this to quickly change a user setting, check a variable, or
-demonstrate something to the user."
- :args '(( :name "expression"
-           :type string
-           :description "A single elisp sexp to evaluate."))
- :category "Emacs Runtime"
- :confirm t
- :include t)
-
-(from https://github.com/karthink/gptel-agent/blob/master/gptel-agent-tools.el)
-
 *** eval_elisp_sandbox
 
 Here’s a tool that spins up a fresh Emacs in batch mode (no init file),
@@ -1491,331 +1256,6 @@ Tools available in [[https://github.com/andreasjansson/greger.el][Greger]]:
 - =read_webpage=
 #+end_seealso
 
-*** list_files
-
-#+begin_src emacs-lisp
-(defun boost-gptel--list-files (&optional recursive)
-  "Return file names under `boost-gptel-root', relative to it.
-Non-recursive (default): only files directly inside the root.
-When RECURSIVE is non-nil: walk subdirectories too, skipping any
-directory whose name starts with a dot (e.g. .git), and excluding
-files that `boost-gptel--sensitive-file-p' rejects, for consistency
-with the other file-management tools."
-  (if recursive
-      (let ((files
-             (directory-files-recursively
-              boost-gptel-root
-              "^[^.].*"
-              nil
-              (lambda (dir)
-                (not (string-prefix-p
-                      "." (file-name-nondirectory
-                           (directory-file-name dir))))))))
-        (mapcar
-         (lambda (f) (file-relative-name f boost-gptel-root))
-         (seq-remove #'boost-gptel--sensitive-file-p files)))
-    (seq-filter
-     (lambda (f) (not (file-directory-p (expand-file-name f boost-gptel-root))))
-     (directory-files boost-gptel-root nil "^[^.].*"))))
-
-;; Register list_files.
-(defvar boost-gptel-tool-list-files
-  (gptel-make-tool
-   :name "list_files"
-   :description
-   "List files inside the authorised root directory. By default only the top
-level; pass recursive=true to also list files in subdirectories (hidden
-directories such as .git are always skipped)."
-   :function
-   (lambda (&optional recursive)
-     (boost-gptel--truncate-string
-      (mapconcat
-       #'identity
-       (boost-gptel--list-files recursive)
-       "\n")
-      boost-gptel-tool-max-output-chars))
-   :args (list
-          '(:name "recursive"
-            :type boolean
-            :description "List files in subdirectories too (default: false)"
-            :optional t))
-   :category "File Management"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-list-files)
-#+end_src
-
-**** list_project_files
-
-#+begin_src emacs-lisp
-(defun boost-gptel--list-project-files (&optional extension)
-  "Return project-relative file names, optionally filtered by EXTENSION."
-  (let* ((project (or (project-current nil)
-                      (user-error "No current project")))
-         (root (file-name-as-directory (project-root project)))
-         (files (project-files project))
-         (suffix
-          (when (and extension (not (string-empty-p extension)))
-            (if (string-prefix-p "." extension)
-                extension
-              (concat "." extension)))))
-    (setq files
-          (seq-remove
-           (lambda (file)
-             (boost-gptel--sensitive-file-p
-              (expand-file-name file root)))
-           files))
-    (when suffix
-      (setq files
-            (seq-filter
-             (lambda (file)
-               (string-suffix-p suffix file t))
-             files)))
-    (boost-gptel--truncate-string
-     (string-join
-      (mapcar (lambda (file) (file-relative-name file root)) files)
-      "\n")
-     boost-gptel-tool-max-output-chars)))
-
-;; Register list_project_files.
-(defvar boost-gptel-tool-list-project-files
-  (gptel-make-tool
-   :name "list_project_files"
-   :description
-   "List files in the current Emacs project. Optionally filter by a file extension such as el, py, or org."
-   :function #'boost-gptel--list-project-files
-   :args (list
-          '(:name "extension"
-            :type string
-            :description "Optional file extension, with or without a leading dot"
-            :optional t))
-   :category "File Management"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-list-project-files)
-#+end_src
-
-*** search_files
-
-(ripgrep)
-
-#+begin_src emacs-lisp
-(defun boost-gptel--search-files (pattern)
-  "Return a printed list of files under the project root whose contents match PATTERN using ripgrep."
-  (let* ((proj (and (fboundp 'project-current) (project-current)))
-         (root (if proj (project-root proj) default-directory))
-         (cmd  (format "rg --files-with-matches --no-heading --color never -e %s %s"
-                       (shell-quote-argument pattern)
-                       (shell-quote-argument root)))
-         (output (shell-command-to-string cmd))
-         (files  (split-string output "\n" t)))
-    (prin1-to-string files)))
-
-;; Register search_files (ripgrep).
-(defvar boost-gptel-tool-search-files
-  (gptel-make-tool
-   :name "search_files"
-   :description
-   "Search file contents under the project root using ripgrep and return matching file paths."
-   :function #'boost-gptel--search-files
-   :args (list
-          '(:name "pattern"
-            :type string
-            :description "Regex or pattern to search for in file contents"))
-   :category "Emacs Runtime"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-search-files)
-#+end_src
-
-**** search_project_files
-
-The search is literal, case-insensitive, bounded by file and match limits, and
-implemented without invoking a shell command.
-
-#+begin_src emacs-lisp
-(defun boost-gptel--search-project-files (query)
-  "Search project files for literal string QUERY and return matching lines."
-  (when (string-empty-p (string-trim query))
-    (user-error "Search query must not be empty"))
-  (let* ((project (or (project-current nil)
-                      (user-error "No current project")))
-         (root (file-name-as-directory (project-root project)))
-         (true-root (file-truename root))
-         (files (seq-take (project-files project)
-                          boost-gptel-tool-max-search-files))
-         (case-fold-search t)
-         (matches nil)
-         (match-count 0)
-         (skipped-count 0))
-    (catch 'enough-matches
-      (dolist (project-file files)
-        (let ((file (expand-file-name project-file root)))
-          (condition-case nil
-              (when (and (file-in-directory-p
-                          (file-truename file)
-                          true-root)
-                         (not (boost-gptel--sensitive-file-p file))
-                         (file-regular-p file)
-                         (file-readable-p file)
-                         (< (file-attribute-size
-                             (file-attributes file))
-                            1000000))
-                (with-temp-buffer
-                  (insert-file-contents file)
-                  (unless (save-excursion
-                            (goto-char (point-min))
-                            (search-forward "\0" nil t))
-                    (goto-char (point-min))
-                    (while (search-forward query nil t)
-                      (let ((line (line-number-at-pos))
-                            (text
-                             (string-trim
-                              (buffer-substring-no-properties
-                               (line-beginning-position)
-                               (line-end-position)))))
-                        (push
-                         (format "%s:%d: %s"
-                                 (file-relative-name file root)
-                                 line
-                                 text)
-                         matches)
-                        (cl-incf match-count)
-                        (when (>= match-count
-                                  boost-gptel-tool-max-search-matches)
-                          (throw 'enough-matches nil)))))))
-            (error
-             (cl-incf skipped-count))))))
-    (let ((result
-           (if matches
-               (string-join (nreverse matches) "\n")
-             "No matches found.")))
-      (boost-gptel--truncate-string
-       (format "%s\n\nFiles skipped after errors: %d"
-               result
-               skipped-count)
-       boost-gptel-tool-max-output-chars))))
-
-;; Register search_project_files.
-(defvar boost-gptel-tool-search-project-files
-  (gptel-make-tool
-   :name "search_project_files"
-   :description
-   "Search a bounded set of project text files for a literal,
-case-insensitive string and return file, line number, and matching line."
-   :function #'boost-gptel--search-project-files
-   :args (list
-          '(:name "query"
-            :type string
-            :description "Non-empty literal text to search for"))
-   :category "File Management"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-search-project-files)
-#+end_src
-
-*** read_file
-
-#+begin_src emacs-lisp
-(defun boost-gptel--read-file (path)
-  "Return bounded text contents of PATH below `boost-gptel-root'."
-  (let ((file (boost-gptel--safe-path path)))
-    (when (boost-gptel--sensitive-file-p file)
-      (user-error "Refusing to read a sensitive path: %s" path))
-    (boost-gptel--read-file-limited file)))
-
-;; Register read_file.
-(defvar boost-gptel-tool-read-file
-  (gptel-make-tool
-   :name "read_file"
-   :description
-   "Read a text file below the authorised root directory."
-   :function
-   (lambda (path)
-     (boost-gptel--read-file path))
-   :args (list
-          '(:name "path"
-            :type string
-            :description "Relative file path, for example 'todo.org'"))
-   :category "File Management"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-read-file)
-#+end_src
-
-**** read_project_file
-
-#+begin_src emacs-lisp
-(defun boost-gptel--read-project-file (relative-path)
-  "Return the contents of project file RELATIVE-PATH."
-  (boost-gptel--read-file-limited
-   (boost-gptel--safe-project-file relative-path)))
-
-;; Register read_project_file.
-(defvar boost-gptel-tool-read-project-file
-  (gptel-make-tool
-   :name "read_project_file"
-   :description
-   "Read a text file inside the current Emacs project. The path must be relative to the project root and may not escape it."
-   :function #'boost-gptel--read-project-file
-   :args (list
-          '(:name "relative_path"
-            :type string
-            :description "Path relative to the current project root"))
-   :category "File Management"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-read-project-file)
-#+end_src
-
-*** edit_file
-
-#+begin_src emacs-lisp
-(defun boost-gptel--edit-file (file-path content)
-  "Overwrite the file at FILE-PATH with CONTENT. Return a success message or error."
-  (condition-case err
-      (let* (;; determine root: use project if any, else default-directory
-             (root (if (and (fboundp 'project-current)
-                            (project-current))
-                       (project-root (project-current))
-                     default-directory))
-             (absolute (expand-file-name file-path root))
-             (dir      (file-name-directory absolute)))
-        (unless (file-directory-p dir)
-          (make-directory dir t))
-        (with-temp-file absolute
-          (insert content))
-        (format "Wrote %d bytes to %s" (string-bytes content) absolute))
-    (error
-     (format "Error editing file %s: %s" file-path (error-message-string err)))))
-
-;; Register edit_file.
-(defvar boost-gptel-tool-edit-file
-  (gptel-make-tool
-   :name "edit_file"
-   :description
-   "Overwrite a file under the project root with given content."
-   :function #'boost-gptel--edit-file
-   :args (list
-          '(:name "file_path" :type string
-            :description "Relative path to the file to edit")
-          '(:name "content"   :type string
-            :description "New content for the file"))
-   :category "Emacs Runtime"
-   :confirm t
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-edit-file)
-#+end_src
-
-**** edit_project_file
-
 *** rename_file
 
 #+begin_src emacs-lisp
@@ -1849,7 +1289,7 @@ if needed."
             :description "Relative path of the file to rename")
           '(:name "new_path" :type string
             :description "New relative path for the file"))
-   :category "Emacs Runtime"
+   :category "Filesystem"
    :confirm t
    :include t))
 
@@ -1885,206 +1325,11 @@ if needed."
    :args (list
           '(:name "file_path" :type string
             :description "Relative path to the file to delete"))
-   :category "Emacs Runtime"
+   :category "Filesystem"
    :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-delete-file)
-#+end_src
-
-*** create_directory
-
-#+begin_src emacs-lisp
-(defun boost-gptel--create-directory (dir-path)
-  "Create the directory DIR-PATH under the project root, including parents.
-Return a success or error message."
-  (condition-case err
-      (let* ((proj-root (if (and (fboundp 'project-current)
-                                 (project-current))
-                            (project-root (project-current))
-                          default-directory))
-             (abs       (expand-file-name dir-path proj-root)))
-        (make-directory abs t)
-        (format "Created directory: %s" abs))
-    (error
-     (format "Error creating directory %s: %s"
-             dir-path
-             (error-message-string err)))))
-
-;; Register create_directory.
-(defvar boost-gptel-tool-create-directory
-  (gptel-make-tool
-   :name "create_directory"
-   :description "Create a directory (and parents) under the project root."
-   :function #'boost-gptel--create-directory
-   :args (list
-          '(:name "dir_path"
-            :type string
-            :description "Relative directory path to create"))
-   :category "Emacs Runtime"
-   :confirm t
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-create-directory)
-#+end_src
-
-** Shell command execution
-
-*** run_shell_command
-
-#+begin_note
-This tool has no command whitelist/blacklist and can run anything the shell
-allows. :confirm t means you see the command before it runs, but the
-post-tool-call hook below only logs the tool *name*, not the command itself — so
-there's no audit trail afterwards. Consider either restricting this (allow-list
-of prefixes, or a dedicated safe subset of commands) or extending the logging
-hook to record the actual command for this tool specifically.
-#+end_note
-
-#+begin_src emacs-lisp
-(defun boost-gptel--run-shell-command (command)
-  "Run COMMAND from `boost-gptel-root' and return its status and bounded output."
-  (when (string-empty-p (string-trim command))
-    (user-error "Command must not be empty"))
-  (let ((default-directory
-         (file-name-as-directory
-          (expand-file-name boost-gptel-root))))
-    (with-temp-buffer
-      (let ((status
-             (call-process shell-file-name
-                           nil
-                           (list t t)
-                           nil
-                           shell-command-switch
-                           command)))
-        (format
-         "Exit status: %s\n\n%s"
-         status
-         (boost-gptel--truncate-string
-          (buffer-substring-no-properties
-           (point-min)
-           (point-max))
-          boost-gptel-tool-max-output-chars))))))
-
-;; Register run_shell_command.
-(defvar boost-gptel-tool-run-shell-command
-  (gptel-make-tool
-   :name "run_shell_command"
-   :description
-   "Run a confirmed shell command from the authorised working directory
-and return bounded combined output."
-   :function #'boost-gptel--run-shell-command
-   :args (list
-          '(:name "command"
-            :type string
-            :description "Exact shell command to execute"))
-   :category "Shell"
-   :confirm t
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-run-shell-command)
-#+end_src
-
-*** man_page
-
-#+begin_src emacs-lisp
-(defun boost-gptel--man-page (topic)
-  "Return the man-page for TOPIC, with formatting removed."
-  (unless (and (stringp topic)
-               (not (string-empty-p (string-trim topic))))
-    (user-error "Man page topic must be a non-empty string"))
-  (condition-case err
-      (shell-command-to-string
-       (format "man %s | col -b"
-               (shell-quote-argument (string-trim topic))))
-    (error
-     (format "Error retrieving man page for %s: %s"
-             topic
-             (error-message-string err)))))
-
-;; Register man_page.
-(defvar boost-gptel-tool-man-page
-  (gptel-make-tool
-   :name "man_page"
-   :description "Fetch the Unix man page for a given command or topic."
-   :function #'boost-gptel--man-page
-   :args (list
-          '(:name "topic"
-            :type string
-            :description "Command or function name to look up"))
-   :category "Shell"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-man-page)
-#+end_src
-
-** Web tools
-
-*** search_web
-
-#+begin_src emacs-lisp
-(defun boost-gptel--search-web (query)
-  "Search the web for QUERY using DuckDuckGo Instant Answer API and return the JSON response."
-  (condition-case err
-      (let* ((cmd (format "curl --silent --get --data-urlencode 'q=%s' 'https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1'"
-                         (shell-quote-argument query)))
-             (output (shell-command-to-string cmd)))
-        output)
-    (error
-     (format "Error performing web search: %s" (error-message-string err)))))
-
-;; Register search_web.
-(defvar boost-gptel-tool-search-web
-  (gptel-make-tool
-   :name "search_web"
-   :description "Search the web for QUERY via DuckDuckGo Instant Answer API and return JSON."
-   :function #'boost-gptel--search-web
-   :args (list
-          '(:name "query"
-            :type string
-            :description "Search query"))
-   :category "Web Tools"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-search-web)
-#+end_src
-
-*** read_webpage
-
-#+begin_src emacs-lisp
-(defun boost-gptel--read-webpage (url)
-  "Fetch the content at URL synchronously and return its body as a string."
-  (condition-case err
-      (let ((buf (url-retrieve-synchronously url t t 10)))
-        (unless (bufferp buf)
-          (error "Failed to retrieve URL: %s" url))
-        (with-current-buffer buf
-          (goto-char (point-min))
-          ;; Skip HTTP headers
-          (re-search-forward "\\(?\\n\\)\\{2,\\}" nil 'move)
-          (let ((body (buffer-substring-no-properties (point) (point-max))))
-            (kill-buffer buf)
-            body)))
-    (error (format "Error fetching %s: %s" url (error-message-string err)))))
-
-;; Register read_webpage.
-(defvar boost-gptel-tool-read-webpage
-  (gptel-make-tool
-   :name "read_webpage"
-   :description
-   "Fetch the content of a webpage at URL and return its body as a string."
-   :function #'boost-gptel--read-webpage
-   :args (list
-          '(:name "url"
-            :type string
-            :description "The URL of the webpage to read"))
-   :category "Web Tools"
-   :confirm nil
-   :include t))
-
-(add-to-list 'gptel-tools boost-gptel-tool-read-webpage)
 #+end_src
 
 ** Org-mode task management
@@ -2319,6 +1564,137 @@ Review every task and update the file as follows:
 
 The post-tool hook only records tool completion without logging arguments or
 returned data.
+
+#+begin_src emacs-lisp
+(defun boost-gptel--post-tool-log (call)
+  "Log completion of a GPTel tool CALL without logging sensitive contents."
+  (message "[GPTel tool completed: %s]" (plist-get call :name))
+  nil)
+
+(add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
+#+end_src
+
+* Agentic LLM use for GPTel
+
+~gptel-agent~ integrates Emacs with an LLM by exposing:
+
+- Low-level implementations in ordinary Elisp functions
+- =gptel-make-tool= registrations to expose them to the model
+
+Separation of core functions from their tool declarations keeps behavior
+testable and permissions explicit.
+
+#+begin_src emacs-lisp
+(require 'gptel-agent nil 'noerror)
+#+end_src
+
+=gptel-agent.el= scans =./agents/= and a list of =skills/= directories for
+Markdown/Org agent definitions, assembles the system prompt, commands to launch
+“gptel-agent” and “gptel-plan” sessions.
+
+** Major tool categories
+
+| Category      | Tool                   | Confirmation | Enabled |
+|---------------+------------------------+--------------+---------|
+| Introspection | =symbol_exists=          | no           | yes     |
+|               | =load_paths=             | no           | yes     |
+|               | =features=               | no           | yes     |
+|               | =manual_names=           | no           | yes     |
+|               | =manual_nodes=           | no           | yes     |
+|               | =manual_node_contents=   | no           | yes     |
+|               | =library_source=         | no           | yes     |
+|               | =symbol_manual_section=  | no           | yes     |
+|               | =function_source=        | no           | yes     |
+|               | =variable_source=        | no           | yes     |
+|               | =variable_value=         | yes          | yes     |
+|               | =function_documentation= | no           | yes     |
+|               | =variable_documentation= | no           | yes     |
+|               | =function_completions=   | no           | yes     |
+|               | =command_completions=    | no           | yes     |
+|               | =variable_completions=   | no           | yes     |
+|---------------+------------------------+--------------+---------|
+| System        | =Bash=                   | yes          | yes     |
+|               | =Eval=                   | yes          | yes     |
+|               | =Diagnostics=            | no           | yes     |
+|---------------+------------------------+--------------+---------|
+| Web           | =WebSearch=              | no           | yes     |
+|               | =WebFetch=               | no           | yes     |
+|---------------+------------------------+--------------+---------|
+| Filesystem    | =Mkdir=                  | yes          | yes     |
+|               | =Glob=                   | no           | yes     |
+|               | =Grep=                   | no           | yes     |
+|               | =Read=                   | no           | yes     |
+|               | =Insert=                 | yes          | yes     |
+|               | =Edit=                   | yes          | yes     |
+|               | =Write=                  | yes          | yes     |
+|---------------+------------------------+--------------+---------|
+| Tasking       | =TodoWrite=              | no           | no      |
+|               | =Skill=                  | no           | yes     |
+|               | =Agent=                  | yes          | yes     |
+
+*** Emacs introspection
+
+- =symbol_exists= -- Check if SYMBOL exists.
+- =load_paths= -- Return the users load paths.
+- =features= -- Return the list of loaded features.
+- =manual_names= -- Return a list of available manual names.
+- =manual_nodes= -- Retrieve a listing of topic nodes within MANUAL.
+- =manual_node_contents= -- Retrieve the contents of NODE in MANUAL.
+- =library_source= -- Read the source code for LIBRARY.
+- =symbol_manual_section= -- Returns contents of manual node for SYMBOL.
+- =function_source= -- Returns the source code for FUNCTION.
+- =variable_source= -- Returns the source code for VARIABLE.
+- =variable_value= -- Returns the global value for VARIABLE.
+- =function_documentation= -- Returns the docstring for FUNCTION.
+- =variable_documentation= -- Returns the docstring VARIABLE.
+- =function_completions= -- Returns a list of functions beginning with FUNCTION_PREFIX.
+- =command_completions= -- Returns a list of commands beginning with COMMAND_PREFIX.
+- =variable_completions= -- Returns a list of variables beginning with VARIABLE_PREFIX.
+
+*** System tools
+
+- =Bash= (gptel-agent-execute-bash) -- Execute a Bash command.
+- =Eval= -- Evaluate Elisp EXPRESSION and return result and any printed output.
+- =Diagnostics= -- Flymake across project
+
+*************** TODO Add Elisp evaluation tools?  Or is it Eval?  Live or sandbox?
+
+*** Web tools
+
+- =WebSearch= -- Search the web for the first five results to a query (DuckDuckGo
+  via EWW).
+- =WebFetch= -- URL fetch with readability, YouTube transcripts.
+
+*** Filesystem tools
+
+- =Mkdir= -- Create a new directory.
+- =Glob= -- Find files matching a glob pattern.
+- =Grep= -- Grep for text in file(s).
+- =Read= -- Read a specific line range from a file.
+- =Insert= -- Insert text at a specific line number in a file.
+- =Edit= -- Replace text in file(s) using string match or unified diff.
+- =Write= -- Create a new file with content.
+
+*************** TODO No Rename tool?  No Delete tool?
+
+*** Task helper and sub-agent orchestration
+
+- =TodoWrite= -- Create and manage a structured task list.
+- =Skill= -- Load a skill (for example: pdf, commit, review-pr) into the current
+  conversation.
+- =Agent= (subagents) -- Launch a specialized agent to handle complex, multi-step
+  tasks autonomously.
+
+** Confirmation & auditing
+
+*** Confirmation
+
+All tools that modify files or shell state use =:confirm t=.
+
+*** Post-tool logging
+
+The post-tool hook =gptel-post-tool-call-functions= audit every tool invocation by
+logging completed tool names (without logging arguments or returned data).
 
 #+begin_src emacs-lisp
 (defun boost-gptel--post-tool-log (call)
