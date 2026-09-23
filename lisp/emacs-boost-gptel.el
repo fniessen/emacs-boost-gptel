@@ -8,12 +8,12 @@
 (require 'cl-lib)               ; cl-incf, cl-delete-if-not, cl-remove-if
 (require 'seq)                  ; seq-remove, seq-filter, seq-take
 (require 'subr-x)               ; string-trim, string-empty-p, string-join, when-let*
-;; (boost--try-require 'auth-source)
+;; (require 'auth-source nil 'noerror)
 (require 'project)
 (require 'pp)
 (require 'org)
 
-(unless (boost--try-require 'gptel)
+(unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
 
 (defgroup boost-gptel nil
@@ -2204,7 +2204,7 @@ Do nothing when the GPTel response belongs to another buffer."
   :group 'boost-gptel)
 
 (when boost-gptel-enable-mcp-integration
-  (boost--try-require 'gptel-integrations))
+  (require 'gptel-integrations nil 'noerror))
 
 (defun boost-gptel-describe-active-configuration ()
   "Display the active GPTel configuration without revealing API keys."
@@ -2248,10 +2248,10 @@ Do nothing when the GPTel response belongs to another buffer."
 (keymap-set boost-gptel-prefix-map
             "l" #'boost-gptel-toggle-debug-logging)
 
-(boost--try-require 'gptel-commit-msg)
+(require 'gptel-commit-msg nil 'noerror)
 
 (when (locate-library "uuid")
-  (boost--try-require 'gptel-proof))
+  (require 'gptel-proof nil 'noerror))
 
 (provide 'emacs-boost-gptel)
 

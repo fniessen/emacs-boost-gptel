@@ -142,12 +142,12 @@ used.
 (require 'cl-lib)               ; cl-incf, cl-delete-if-not, cl-remove-if
 (require 'seq)                  ; seq-remove, seq-filter, seq-take
 (require 'subr-x)               ; string-trim, string-empty-p, string-join, when-let*
-;; (boost--try-require 'auth-source)
+;; (require 'auth-source nil 'noerror)
 (require 'project)
 (require 'pp)
 (require 'org)
 
-(unless (boost--try-require 'gptel)
+(unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
 #+end_src
 
@@ -3358,7 +3358,7 @@ This section only loads GPTel's MCP bridge.  Server definitions belong to the
   :group 'boost-gptel)
 
 (when boost-gptel-enable-mcp-integration
-  (boost--try-require 'gptel-integrations))
+  (require 'gptel-integrations nil 'noerror))
 #+end_src
 
 After configuring servers through =mcp.el=, use these commands interactively:
@@ -3428,7 +3428,7 @@ diagnostic session and inspect the log before sharing it.
 * GPTel-commit-msg
 
 #+begin_src emacs-lisp
-(boost--try-require 'gptel-commit-msg)
+(require 'gptel-commit-msg nil 'noerror)
 #+end_src
 
 * GPTel-proof
@@ -3464,7 +3464,7 @@ every change.
 
 #+begin_src emacs-lisp
 (when (locate-library "uuid")
-  (boost--try-require 'gptel-proof))
+  (require 'gptel-proof nil 'noerror))
 #+end_src
 
 * File epilogue
@@ -3503,7 +3503,7 @@ every change.
 * GPTel-watch
 
 #+begin_src emacs-lisp :tangle no
-(when (boost--try-require 'gptel-watch)
+(when (require 'gptel-watch nil 'noerror)
   (gptel-watch-global-mode 1)
 
   (setq gptel-watch-trigger-patterns
