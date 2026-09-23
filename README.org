@@ -1558,22 +1558,6 @@ Review every task and update the file as follows:
 6. Before writing, show a concise summary of the intended modifications.
 7. Then replace 'todo.org' with the complete updated content.
 
-** Tool hooks
-
-*** Post-tool logging
-
-The post-tool hook only records tool completion without logging arguments or
-returned data.
-
-#+begin_src emacs-lisp
-(defun boost-gptel--post-tool-log (call)
-  "Log completion of a GPTel tool CALL without logging sensitive contents."
-  (message "[GPTel tool completed: %s]" (plist-get call :name))
-  nil)
-
-(add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
-#+end_src
-
 * Agentic LLM use for GPTel
 
 ~gptel-agent~ integrates Emacs with an LLM by exposing:
@@ -1589,48 +1573,48 @@ testable and permissions explicit.
 #+end_src
 
 =gptel-agent.el= scans =./agents/= and a list of =skills/= directories for
-Markdown/Org agent definitions, assembles the system prompt, commands to launch
-“gptel-agent” and “gptel-plan” sessions.
+Markdown/Org agent definitions, assembles the system prompt, creates the
+“gptel-plan” preset.
 
 ** Major tool categories
 
-| Category      | Tool                   | Confirmation | Enabled |
-|---------------+------------------------+--------------+---------|
-| Introspection | =symbol_exists=          | no           | yes     |
-|               | =load_paths=             | no           | yes     |
-|               | =features=               | no           | yes     |
-|               | =manual_names=           | no           | yes     |
-|               | =manual_nodes=           | no           | yes     |
-|               | =manual_node_contents=   | no           | yes     |
-|               | =library_source=         | no           | yes     |
-|               | =symbol_manual_section=  | no           | yes     |
-|               | =function_source=        | no           | yes     |
-|               | =variable_source=        | no           | yes     |
-|               | =variable_value=         | yes          | yes     |
-|               | =function_documentation= | no           | yes     |
-|               | =variable_documentation= | no           | yes     |
-|               | =function_completions=   | no           | yes     |
-|               | =command_completions=    | no           | yes     |
-|               | =variable_completions=   | no           | yes     |
-|---------------+------------------------+--------------+---------|
-| System        | =Bash=                   | yes          | yes     |
-|               | =Eval=                   | yes          | yes     |
-|               | =Diagnostics=            | no           | yes     |
-|---------------+------------------------+--------------+---------|
-| Web           | =WebSearch=              | no           | yes     |
-|               | =WebFetch=               | no           | yes     |
-|---------------+------------------------+--------------+---------|
-| Filesystem    | =Mkdir=                  | yes          | yes     |
-|               | =Glob=                   | no           | yes     |
-|               | =Grep=                   | no           | yes     |
-|               | =Read=                   | no           | yes     |
-|               | =Insert=                 | yes          | yes     |
-|               | =Edit=                   | yes          | yes     |
-|               | =Write=                  | yes          | yes     |
-|---------------+------------------------+--------------+---------|
-| Tasking       | =TodoWrite=              | no           | no      |
-|               | =Skill=                  | no           | yes     |
-|               | =Agent=                  | yes          | yes     |
+| Category      | Tool                   | Confirm? | Enabled? |
+|---------------+------------------------+----------+----------|
+| Introspection | =symbol_exists=          | no       | yes      |
+|               | =load_paths=             | no       | yes      |
+|               | =features=               | no       | yes      |
+|               | =manual_names=           | no       | yes      |
+|               | =manual_nodes=           | no       | yes      |
+|               | =manual_node_contents=   | no       | yes      |
+|               | =library_source=         | no       | yes      |
+|               | =symbol_manual_section=  | no       | yes      |
+|               | =function_source=        | no       | yes      |
+|               | =variable_source=        | no       | yes      |
+|               | =variable_value=         | yes      | yes      |
+|               | =function_documentation= | no       | yes      |
+|               | =variable_documentation= | no       | yes      |
+|               | =function_completions=   | no       | yes      |
+|               | =command_completions=    | no       | yes      |
+|               | =variable_completions=   | no       | yes      |
+|---------------+------------------------+----------+----------|
+| System        | =Bash=                   | yes      | yes      |
+|               | =Eval=                   | yes      | yes      |
+|               | =Diagnostics=            | no       | yes      |
+|---------------+------------------------+----------+----------|
+| Web           | =WebSearch=              | no       | yes      |
+|               | =WebFetch=               | no       | yes      |
+|---------------+------------------------+----------+----------|
+| Filesystem    | =Mkdir=                  | yes      | yes      |
+|               | =Glob=                   | no       | yes      |
+|               | =Grep=                   | no       | yes      |
+|               | =Read=                   | no       | yes      |
+|               | =Insert=                 | yes      | yes      |
+|               | =Edit=                   | yes      | yes      |
+|               | =Write=                  | yes      | yes      |
+|---------------+------------------------+----------+----------|
+| Tasking       | =TodoWrite=              | no       | no       |
+|               | =Skill=                  | no       | yes      |
+|               | =Agent=                  | yes      | yes      |
 
 *** Emacs introspection
 
@@ -1651,13 +1635,18 @@ Markdown/Org agent definitions, assembles the system prompt, commands to launch
 - =command_completions= -- Returns a list of commands beginning with COMMAND_PREFIX.
 - =variable_completions= -- Returns a list of variables beginning with VARIABLE_PREFIX.
 
+#+begin_note
+The introspection file currently defines two tools named "features". This
+appears to be an upstream naming collision.
+#+end_note
+
 *** System tools
 
-- =Bash= (gptel-agent-execute-bash) -- Execute a Bash command.
+- =Bash= -- Execute a Bash command.
 - =Eval= -- Evaluate Elisp EXPRESSION and return result and any printed output.
 - =Diagnostics= -- Flymake across project
 
-*************** TODO Add Elisp evaluation tools?  Or is it Eval?  Live or sandbox?
+*************** TODO Add an Elisp evaluation tool (sandbox vs live)?
 
 *** Web tools
 

@@ -934,13 +934,6 @@ if needed."
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-delete-task)
 
-(defun boost-gptel--post-tool-log (call)
-  "Log completion of a GPTel tool CALL without logging sensitive contents."
-  (message "[GPTel tool completed: %s]" (plist-get call :name))
-  nil)
-
-(add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
-
 (require 'gptel-agent nil 'noerror)
 
 (defun boost-gptel--post-tool-log (call)
