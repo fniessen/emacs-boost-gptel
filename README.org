@@ -10,90 +10,6 @@
 #+OPTIONS:   toc:3 num:t
 #+PROPERTY:  header-args:emacs-lisp :tangle lisp/emacs-boost-gptel.el :mkdirp yes :results silent
 
-* Useful links
-
-** [[https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/][Multiple Backends, Dynamic Discovery, Rewrite and Chat]]
-
-** [[https://www.youtube.com/watch?v=bsRnh_brggM][Tous les LLM dans Emacs, avec gptel]]
-
-** [[prompts/shorten.txt from https://github.com/jwiegley/dot-emacs][Shorten Org task titles to ≤67 chars]]
-
-** [[prompts/title.txt from https://github.com/jwiegley/dot-emacs][Generate concise action-oriented titles]]
-
-** [[https://github.com/dolmens/gptel-aibo][Plan/execute actions]]
-
-** [[https://www.youtube.com/watch?v=M386KUIh3Xc][Emacs Lisp et gptel : créer des outils LLM personnalisés pour appeler des fonctions Emacs]]
-
-** STRT [[https://www.youtube.com/watch?v=Hkih7jaqOnE][Agentic LLM use in Emacs using Model Context Protocol (MCP)]]
-
-- House rules for appartment at 05:50
-
-*** TODO Add instructions for "Tool Use" (12:34)
-
-"After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding.
-
-Use your thinking to plan and iterate based on this new information, and then take the best next action.
-
-Whenever you need data:
-1. PLAN
-   - Restate your goal.
-   - Choose the single best tool for that goal, citing capabilities.
-   - Write down the exact arguments you'll pass.
-
-2. EXECUTE
-   - Call the tool with precisely those arguments.
-
-3. REFLECT
-   - Check raw output for success: Is it empty? Did the path exist? Did I get what I expected?
-   - If OK, parse and continue. If not, pick a fallback tool or refine arguments.
-   - Record what you tried, what worked or failed, then decide next step.
-
-Example:
-Goal: find the newest file in ~/Downloads by modified date.
-
-PLAN:
-   - I need a reverse-time sort. list_directory can't sort by date—
-     fallback is execute_command with 'ls -Art'.
-   - Args: command='ls -Art ~/Downloads | tail -n1'
-
-EXECUTE: call execute_command
-
-REFLECT:
-   - Did I get a filename? If yes, capture it. If no, check path or switch to 'find ... -printf ...'"
-
-** [[https://www.youtube.com/watch?v=rOBKE5Dxqyg][Vibe code with Emacs and gptel!]]
-
-** DONE [[https://www.youtube.com/watch?v=n_NZk3hDl6I][MCP for Emacs - Improve your notes with ORG MODE]]
-
-** [[https://www.youtube.com/watch?v=xHEnWvKmSKM][Jouez de votre LLM comme d'un instrument]]
-
-Packages used in this demo:
-- This slideshow manager is https://github.com/positron-solutions/dslide
-- The LLM client is https://github.com/karthink/gptel
-- The pretty Org mode elements are from https://github.com/minad/org-modern
-- The fancy flymake annotations are from https://github.com/konrad1977/flyover
-- The YouTube RSS feed fetching is from https://github.com/karthink/elfeed-tube
-- gptel-annotate is at https://github.com/karthink/gptel-annotate
-- Macher is at https://github.com/kmontag/macher
-- gptel-agent is at https://github.com/karthink/gptel-agent
-- Sketches created in Xournal++: https://xournalpp.github.io
-
-** [[https://www.youtube.com/watch?v=T9HSTSm7i5M][New experimental feature of gptel]] (gptel-inline)
-
-** [[https://www.linkhub.dk/emacs-ai-coding-workflows-gptel-claude-ellama-and-beyond][Emacs AI Coding Workflows: GPTel, Claude, Ellama, and Beyond]]
-
-- codeium.el or copilot.el for always-on inline completions as you type
-- GPTel + Claude for on-demand chat, code generation, and extended reasoning —
-  with Org mode integration for persistent conversation history
-- Ellama + Ollama for fast, private, offline routine tasks with a menu of
-  ready-made commands
-- aidermacs for multi-file agentic edits and large refactors, with ediff review
-  and Architect Mode
-
-** [[https://sukany.cz/blog/2026-03-23-emacs-gptel-setup/][LLMs in Emacs: My Actual gptel Setup]]
-
-** [[https://www.youtube.com/watch?v=rOBKE5Dxqyg][Vibe code with Emacs and gptel!]]
-
 * About this configuration
 
 This file shows an example literate GPTel config. Read it top to bottom--
@@ -126,7 +42,7 @@ variable remains on the first line of the generated file.
 #+begin_src emacs-lisp
 ;;; emacs-boost-gptel.el --- GPTel configuration  -*- lexical-binding: t; -*-
 
-;; This file is generated from emacs-boost-gptel.txt.
+;; This file is generated from README.org.
 ;; Edit the Org source, then tangle it again.
 
 ;;; Code:
@@ -146,6 +62,9 @@ used.
 (require 'project)
 (require 'pp)
 (require 'org)
+
+(require 'package)
+(package-initialize)
 
 (unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
@@ -1155,9 +1074,12 @@ and return its printed result or an error message."
                        (format \"Error: %%s\" (error-message-string err)))))"
            code))
          (cmd
-          (format "emacs -Q --batch --eval %s"
+          (format "LC_ALL=C emacs -Q --batch --eval %s"
                   (shell-quote-argument wrapped)))
-         (output (shell-command-to-string cmd)))
+         (output
+          (let ((process-environment (copy-sequence process-environment)))
+            (setenv "LC_ALL" "C")
+            (shell-command-to-string cmd))))
     ;; Trim trailing newline and return.
     (string-trim-right output)))
 
@@ -1490,7 +1412,8 @@ This is the only write tool in the example.  It can write only inside
          nil t)
         (progn
           (org-cut-subtree)
-          (save-buffer)
+          (when (buffer-file-name)
+            (save-buffer))
           (format "Deleted TODO heading matching '%s'." pattern))
       (format "No TODO heading matching '%s' found." pattern))))
 
@@ -2414,6 +2337,34 @@ and ~C-c C-c~ to send the current prompt.
 The send binding is installed in ~gptel-mode-map~, not globally or in
 ~org-mode-map~. Therefore, ~C-c C-c~ retains its normal Org behaviour in ordinary
 Org buffers and invokes ~gptel-send~ only while ~gptel-mode~ is active.
+
+#+begin_src emacs-lisp
+(defun boost--set-key-if-free (keymap key command &optional scope)
+  "Bind KEY to COMMAND in KEYMAP only if KEY is unbound.
+KEYMAP may be the map itself or a symbol naming it.
+If already bound, emit a warning mentioning SCOPE (string)."
+  (let* ((map (if (keymapp keymap)
+                  keymap
+                (when (and (symbolp keymap) (boundp keymap))
+                  (symbol-value keymap))))
+         (existing-binding (and map (lookup-key map key t))))
+    (cond
+     ((not map)
+      (display-warning
+       'boost
+       "Keymap not available (yet)"
+       :warning))
+     ((or (null existing-binding) (numberp existing-binding))
+      (define-key map key command))
+     (t
+      (when init-file-debug
+        (display-warning
+         'boost
+         (format "Keyboard shortcut %s conflicts with an existing one%s!"
+                 (key-description key)
+                 (if scope (format " in %s" scope) ""))
+         :warning))))))
+#+end_src
 
 Global bindings:
 

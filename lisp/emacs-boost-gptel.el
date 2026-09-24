@@ -1,6 +1,6 @@
 ;;; emacs-boost-gptel.el --- GPTel configuration  -*- lexical-binding: t; -*-
 
-;; This file is generated from emacs-boost-gptel.txt.
+;; This file is generated from README.org.
 ;; Edit the Org source, then tangle it again.
 
 ;;; Code:
@@ -12,6 +12,9 @@
 (require 'project)
 (require 'pp)
 (require 'org)
+
+(require 'package)
+(package-initialize)
 
 (unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
@@ -648,9 +651,12 @@ and return its printed result or an error message."
                        (format \"Error: %%s\" (error-message-string err)))))"
            code))
          (cmd
-          (format "emacs -Q --batch --eval %s"
+          (format "LC_ALL=C emacs -Q --batch --eval %s"
                   (shell-quote-argument wrapped)))
-         (output (shell-command-to-string cmd)))
+         (output
+          (let ((process-environment (copy-sequence process-environment)))
+            (setenv "LC_ALL" "C")
+            (shell-command-to-string cmd))))
     ;; Trim trailing newline and return.
     (string-trim-right output)))
 
@@ -913,7 +919,8 @@ if needed."
          nil t)
         (progn
           (org-cut-subtree)
-          (save-buffer)
+          (when (buffer-file-name)
+            (save-buffer))
           (format "Deleted TODO heading matching '%s'." pattern))
       (format "No TODO heading matching '%s' found." pattern))))
 
@@ -1375,6 +1382,32 @@ font-lock faces remain visible inside Org source blocks."
 
 ;; Convenient chat sending (in GPTel conversation buffers).
 (keymap-set gptel-mode-map "C-c C-c" #'gptel-send)
+
+(defun boost--set-key-if-free (keymap key command &optional scope)
+  "Bind KEY to COMMAND in KEYMAP only if KEY is unbound.
+KEYMAP may be the map itself or a symbol naming it.
+If already bound, emit a warning mentioning SCOPE (string)."
+  (let* ((map (if (keymapp keymap)
+                  keymap
+                (when (and (symbolp keymap) (boundp keymap))
+                  (symbol-value keymap))))
+         (existing-binding (and map (lookup-key map key t))))
+    (cond
+     ((not map)
+      (display-warning
+       'boost
+       "Keymap not available (yet)"
+       :warning))
+     ((or (null existing-binding) (numberp existing-binding))
+      (define-key map key command))
+     (t
+      (when init-file-debug
+        (display-warning
+         'boost
+         (format "Keyboard shortcut %s conflicts with an existing one%s!"
+                 (key-description key)
+                 (if scope (format " in %s" scope) ""))
+         :warning))))))
 
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "C-c <return>") nil))
