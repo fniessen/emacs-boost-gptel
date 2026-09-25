@@ -383,17 +383,6 @@ assumptions, then propose the smallest safe change."))
     (princ "Active GPTel context:\n\n")
     (pp gptel-context)))
 
-(defcustom boost-gptel-root
-  (expand-file-name "~/")
-  "Authorised working directory for GPTel file tools.
-
-This directory limits the paths accepted by file-management tools.  It does
-not sandbox commands executed by `run_shell_command'."
-  :type 'directory
-  :group 'boost-gptel)
-
-(make-directory boost-gptel-root t)
-
 (defun boost-gptel--project-root (&optional directory)
   "Return the current project root for DIRECTORY, or nil."
   (when-let* ((project (project-current nil directory)))
@@ -945,7 +934,7 @@ if needed."
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
-  (message "[GPTel tool completed: %s]" (plist-get call :name))
+  (message "[Ran `%s']" (plist-get call :name))
   nil)
 
 (add-hook 'gptel-post-tool-call-functions #'boost-gptel--post-tool-log)
