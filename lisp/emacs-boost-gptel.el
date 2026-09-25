@@ -12,12 +12,15 @@
 (require 'project)
 (require 'pp)
 (require 'org)
+(require 'hl-line)
 
 (require 'package)
 (package-initialize)
 
 (unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
+
+(require 'gptel-context)
 
 (defgroup boost-gptel nil
   "Personal configuration layered on top of GPTel."
