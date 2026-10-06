@@ -2,9 +2,30 @@ EMACS ?= emacs
 BATCH = $(EMACS) -Q --batch
 LOAD_PATH = -L lisp -L tests
 SOURCE = lisp/emacs-boost-gptel.el
-TESTS = tests/gptel-tools-test.el
+TEST_FILES = tests/gptel-tools-test.el tests/agent-todo-test.el
+TEST_LOAD_ARGS = $(foreach file,$(TEST_FILES),-l $(file))
 
 .PHONY: all check tangle test compile clean
+
+# Show this help.
+help:
+	@echo "Usage: make TARGET"
+	@echo ""
+	@echo "Targets:"
+	@awk '\
+	/^[[:space:]]*#[[:space:]]/ { \
+		description = $$0; \
+		sub(/^[[:space:]]*#[[:space:]]*/, "", description); \
+		next; \
+	} \
+	/^[a-zA-Z0-9_-]+:/ { \
+		target = $$0; \
+		sub(/:.*/, "", target); \
+		printf "  %-15s %s\n", target, description; \
+		description = ""; \
+		next; \
+	} \
+	{ description = "" }' [Mm]akefile
 
 # Run the complete validation workflow.
 all: check
@@ -16,9 +37,9 @@ check: tangle test compile
 tangle:
 	$(BATCH) --eval "(progn (require 'org) (require 'ob-tangle) (org-babel-tangle-file \"README.org\"))"
 
-# Run the ERT test suite.
+# Run the ERT test suites.
 test: tangle
-	$(BATCH) $(LOAD_PATH) -l $(TESTS) -f ert-run-tests-batch-and-exit
+	$(BATCH) $(LOAD_PATH) $(TEST_LOAD_ARGS) -f ert-run-tests-batch-and-exit
 
 # Byte-compile the generated Emacs Lisp file.
 compile: tangle
