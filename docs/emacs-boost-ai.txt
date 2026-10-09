@@ -67,7 +67,7 @@ References:
 #+end_src
 
 #+begin_src emacs-lisp
-(when (boost--try-require 'gptel-anthropic)
+(when (require 'gptel-anthropic nil 'noerror)
 
   (setq gptel-api-key
       (let* ((api-key (or (getenv "ANTHROPIC_API_KEY")
@@ -85,22 +85,6 @@ References:
 #+end_src
 
 ** Helper functions
-
-*** boost--try-require
-
-#+begin_src emacs-lisp
-;; Require a feature/library if available; if not, fail silently.
-(defun boost--try-require (feature)
-  "Try to (require FEATURE) silently.
-
-Return t on success, nil on failure. If `init-file-debug' is non-nil,
-emit a warning message when the feature can't be loaded."
-  (if (require feature nil 'noerror)
-      t
-    (when (bound-and-true-p init-file-debug)
-      (message "WARNING [boost]: Cannot load `%s'" feature))
-    nil))
-#+end_src
 
 *** boost--set-key-if-free
 
@@ -187,7 +171,7 @@ Useful functions:
 
 #+begin_src emacs-lisp
 ;; Load gptel.
-(when (boost--try-require 'gptel)
+(when (require 'gptel nil 'noerror)
 
   ;; Set OpenAI API key.
   (when (bound-and-true-p boost-openai-key)
@@ -1119,7 +1103,7 @@ It's far more efficient than constantly copy-pasting context into ChatGPT.
 
 #+begin_src emacs-lisp :tangle no
 ;; Load org-ai.
-(when (boost--try-require 'org-ai)
+(when (require 'org-ai nil 'noerror)
 
   ;; Enable org-ai-mode in Org mode.
   (add-hook 'org-mode-hook #'org-ai-mode)
@@ -1129,7 +1113,7 @@ It's far more efficient than constantly copy-pasting context into ChatGPT.
     (setq org-ai-openai-api-token boost-openai-key))
 
   ;; Install YASnippet templates for org-ai.
-  (when (boost--try-require 'yasnippet)
+  (when (require 'yasnippet nil 'noerror)
     (org-ai-install-yasnippets)))
 #+end_src
 
