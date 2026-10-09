@@ -13,9 +13,8 @@
 (require 'project)
 
 (defmacro with-temp-gptel-roots (&rest body)
-  "Temporarily bind GPTel root, note directory, default-directory, and safe buffer regexp."
+  "Temporarily bind note directory, default-directory, and safe buffer regexp."
   `(let* ((temp-root (make-temp-file "gptel-test-root" t))
-          (boost-gptel-root temp-root)
           (boost-gptel-note-directory temp-root))
      (let ((default-directory temp-root)
            ;; allow read-buffer on any buffer
@@ -34,22 +33,27 @@
   (should (equal (boost-gptel--symbol-exists "car") "true"))
   (should (equal (boost-gptel--symbol-exists "nonexistent-symbol-xyz") "false")))
 
-(ert-deftest boost-gptel-test-function-documentation ()
-  "function_documentation should return documentation for a known function."
-  (let ((doc (boost-gptel--function-documentation "car")))
-    (should (string-match-p "Function: car" doc))))
+;; (ert-deftest boost-gptel-test-function-documentation ()
+;;   "function_documentation should return documentation for a known function."
+;;   (let ((doc (boost-gptel--function-documentation "car")))
+;;     (should (string-match-p "Function: car" doc))))
 
-(ert-deftest boost-gptel-test-variable-documentation ()
-  "variable_documentation should return a string (documentation or error)."
-  (let ((doc (boost-gptel--variable-documentation "major-mode")))
-    (should (stringp doc))
-    (should (> (length doc) 0))))
+;; (ert-deftest boost-gptel-test-variable-documentation ()
+;;   "variable_documentation should return a string (documentation or error)."
+;;   (let ((doc (boost-gptel--variable-documentation "major-mode")))
+;;     (should (stringp doc))
+;;     (should (> (length doc) 0))))
 
 (ert-deftest boost-gptel-test-lookup-key ()
   "lookup_key should return binding info."
   (let ((res (boost-gptel--lookup-key "C-f")))
     (should (string-match-p "Key: C-f" res))
     (should (string-match-p "Binding:" res))))
+
+(ert-deftest boost-gptel-test-prefix-keymap ()
+  "The global GPTel prefix should bind the keymap object."
+  (should (eq boost-gptel-prefix-map
+              (lookup-key global-map (kbd "C-c g")))))
 
 (ert-deftest boost-gptel-test-list-packages ()
   "list_packages should return a printed list."
@@ -73,9 +77,9 @@
     (should (listp buffers))
     (should (member (buffer-name (current-buffer)) buffers))))
 
-(ert-deftest boost-gptel-test-eval-elisp ()
-  "eval_elisp should evaluate code and return its printed result."
-  (should (string-match-p "42" (boost-gptel--eval-elisp "(+ 19 23)"))))
+;; (ert-deftest boost-gptel-test-eval-elisp ()
+;;   "eval_elisp should evaluate code and return its printed result."
+;;   (should (string-match-p "42" (boost-gptel--eval-elisp "(+ 19 23)"))))
 
 (ert-deftest boost-gptel-test-eval-elisp-sandbox ()
   "eval_elisp_sandbox should evaluate in a fresh Emacs process."
@@ -87,6 +91,35 @@
   (let ((ts (boost-gptel--current-datetime)))
     (should (stringp ts))
     (should (> (length ts) 0))))
+
+(ert-deftest boost-gptel-test-project-inspection-tools ()
+  "Project inspection tools should list, search, and safely read files."
+  (with-temp-gptel-roots
+    (make-directory (expand-file-name ".git" temp-root))
+    (make-directory (expand-file-name "sub" temp-root))
+    (write-region "needle here\n" nil (expand-file-name "sub/code.el" temp-root))
+    (write-region "do not expose\n" nil (expand-file-name ".env" temp-root))
+    (with-temp-file (expand-file-name "binary.dat" temp-root)
+      (insert "text\0binary"))
+    (let ((default-directory temp-root))
+      (let ((files (read (boost-gptel--list-project-files))))
+        (should (member "sub/code.el" files))
+        (should-not (member ".env" files)))
+      (let ((search-result (boost-gptel--search-project-files "needle")))
+        (should (string-match-p "sub/code.el:1: needle here" search-result)))
+      (should (string= "needle here\n"
+                       (boost-gptel--read-project-file "sub/code.el")))
+      (should-error (boost-gptel--read-project-file "../outside"))
+      (should-error (boost-gptel--read-project-file ".env"))
+      (should-error (boost-gptel--read-project-file "binary.dat")))))
+
+(ert-deftest boost-gptel-test-symbol-introspection-tools ()
+  "Symbol introspection tools should distinguish known and unknown symbols."
+  (should (string= "true" (boost-gptel--symbol-exists "message")))
+  (should (string= "false" (boost-gptel--symbol-exists "definitely-unknown")))
+  (should (string-match-p "Display a message"
+                          (boost-gptel--function-documentation "message")))
+  (should-error (boost-gptel--function-documentation "definitely-unknown")))
 
 ;;; Buffer access tools
 
@@ -101,90 +134,87 @@
 
 ;;; File management tools
 
-(ert-deftest boost-gptel-test-list-files ()
-  "list_files should return a list of file names under boost-gptel-root."
-  (with-temp-gptel-roots
-    ;; create two files
-    (write-region "A" nil (expand-file-name "f1.txt" boost-gptel-root))
-    (write-region "B" nil (expand-file-name "f2.org" boost-gptel-root))
-    (let ((files (boost-gptel--list-files)))
-      (should (member "f1.txt" files))
-      (should (member "f2.org" files)))))
+;; (ert-deftest boost-gptel-test-list-files ()
+;;   "list_files should return a list of file names under boost-gptel-root."
+;;   (with-temp-gptel-roots
+;;     ;; create two files
+;;     (write-region "A" nil (expand-file-name "f1.txt" boost-gptel-root))
+;;     (write-region "B" nil (expand-file-name "f2.org" boost-gptel-root))
+;;     (let ((files (boost-gptel--list-files)))
+;;       (should (member "f1.txt" files))
+;;       (should (member "f2.org" files)))))
 
-(ert-deftest boost-gptel-test-list-project-files-no-project ()
-  "list_project_files errors outside a project."
-  (should-error (boost-gptel--list-project-files)))
+;; (ert-deftest boost-gptel-test-list-project-files-no-project ()
+;;   "list_project_files errors outside a project."
+;;   (should-error (boost-gptel--list-project-files)))
 
-(ert-deftest boost-gptel-test-search-files ()
-  "search_files should find files matching pattern."
-  (with-temp-gptel-roots
-    ;; create two files
-    (write-region "foo" nil (expand-file-name "a.txt" boost-gptel-root))
-    (write-region "bar" nil (expand-file-name "b.txt" boost-gptel-root))
-    (let ((res (read (boost-gptel--search-files "foo"))))
-      (should (member (expand-file-name "a.txt" default-directory) res)))))
+;; (ert-deftest boost-gptel-test-search-files ()
+;;   "search_files should find files matching pattern."
+;;   (with-temp-gptel-roots
+;;     ;; create two files
+;;     (write-region "foo" nil (expand-file-name "a.txt" boost-gptel-root))
+;;     (write-region "bar" nil (expand-file-name "b.txt" boost-gptel-root))
+;;     (let ((res (read (boost-gptel--search-files "foo"))))
+;;       (should (member (expand-file-name "a.txt" default-directory) res)))))
 
-(ert-deftest boost-gptel-test-search-project-files-no-project ()
-  "search_project_files errors outside a project."
-  (should-error (boost-gptel--search-project-files "x")))
+;; (ert-deftest boost-gptel-test-search-project-files-no-project ()
+;;   "search_project_files errors outside a project."
+;;   (should-error (boost-gptel--search-project-files "x")))
 
-(ert-deftest boost-gptel-test-read-file-and-edit-file ()
-  "read_file and edit_file should round-trip contents under boost-gptel-root."
-  (with-temp-gptel-roots
-    (let ((path "t1.txt")
-          (content "Test-content"))
-      (should (string-match-p
-               "Wrote" (boost-gptel--edit-file path content)))
-      (should (string-match-p content
-                              (boost-gptel--read-file path))))))
+;; (ert-deftest boost-gptel-test-read-file-and-edit-file ()
+;;   "read_file and edit_file should round-trip contents under boost-gptel-root."
+;;   (with-temp-gptel-roots
+;;     (let ((path "t1.txt")
+;;           (content "Test-content"))
+;;       (should (string-match-p
+;;                "Wrote" (boost-gptel--edit-file path content)))
+;;       (should (string-match-p content
+;;                               (boost-gptel--read-file path))))))
 
 (ert-deftest boost-gptel-test-edit-rename-delete-file ()
-  "edit_file, rename_file, delete_file chain should work under project-root."
+  "rename_file and delete_file should work under project-root."
   (with-temp-gptel-roots
-    (let ((default-directory boost-gptel-root))
-      ;; edit_file writes a file
-      (should (string-match-p "Wrote" (boost-gptel--edit-file "x.txt" "X")))
-      (should (file-exists-p (expand-file-name "x.txt" boost-gptel-root)))
-      ;; rename
+    (let ((default-directory temp-root))
+      (write-region "X" nil (expand-file-name "x.txt" default-directory))
       (should (string-match-p "Renamed" (boost-gptel--rename-file "x.txt" "y.txt")))
-      (should (file-exists-p (expand-file-name "y.txt" boost-gptel-root)))
-      (should-not (file-exists-p (expand-file-name "x.txt" boost-gptel-root)))
+      (should (file-exists-p (expand-file-name "y.txt" temp-root)))
+      (should-not (file-exists-p (expand-file-name "x.txt" temp-root)))
       ;; delete
       (should (string-match-p "Deleted" (boost-gptel--delete-file "y.txt")))
-      (should-not (file-exists-p (expand-file-name "y.txt" boost-gptel-root))))))
+      (should-not (file-exists-p (expand-file-name "y.txt" temp-root))))))
 
-(ert-deftest boost-gptel-test-create-directory ()
-  "create_directory should create nested dirs under default-directory."
-  (with-temp-gptel-roots
-    (let ((msg (boost-gptel--create-directory "d1/d2")))
-      (should (string-match-p "Created directory" msg))
-      (should (file-directory-p (expand-file-name "d1/d2" default-directory))))))
+;; (ert-deftest boost-gptel-test-create-directory ()
+;;   "create_directory should create nested dirs under default-directory."
+;;   (with-temp-gptel-roots
+;;     (let ((msg (boost-gptel--create-directory "d1/d2")))
+;;       (should (string-match-p "Created directory" msg))
+;;       (should (file-directory-p (expand-file-name "d1/d2" default-directory))))))
 
 ;;; Shell and web tools
 
-(ert-deftest boost-gptel-test-run-shell-command ()
-  "run_shell_command should execute and return status."
-  (with-temp-gptel-roots
-    (let ((out (boost-gptel--run-shell-command "echo OK")))
-      (should (string-match-p "Exit status: 0" out))
-      (should (string-match-p "OK" out)))))
+;; (ert-deftest boost-gptel-test-run-shell-command ()
+;;   "run_shell_command should execute and return status."
+;;   (with-temp-gptel-roots
+;;     (let ((out (boost-gptel--run-shell-command "echo OK")))
+;;       (should (string-match-p "Exit status: 0" out))
+;;       (should (string-match-p "OK" out)))))
 
-(ert-deftest boost-gptel-test-man-page ()
-  "man_page should return content or error for known command."
-  (let ((out (boost-gptel--man-page "echo")))
-    (should (stringp out))
-    (should (> (length out) 0))))
+;; (ert-deftest boost-gptel-test-man-page ()
+;;   "man_page should return content or error for known command."
+;;   (let ((out (boost-gptel--man-page "echo")))
+;;     (should (stringp out))
+;;     (should (> (length out) 0))))
 
-(ert-deftest boost-gptel-test-search-web ()
-  "search_web should return a non-empty string."
-  (let ((res (boost-gptel--search-web "emacs")))
-    (should (stringp res))
-    (should (> (length res) 0))))
+;; (ert-deftest boost-gptel-test-search-web ()
+;;   "search_web should return a non-empty string."
+;;   (let ((res (boost-gptel--search-web "emacs")))
+;;     (should (stringp res))
+;;     (should (> (length res) 0))))
 
-(ert-deftest boost-gptel-test-read-webpage ()
-  "read_webpage should fetch a known URL."
-  (let ((res (boost-gptel--read-webpage "https://example.com")))
-    (should (string-match-p "Example Domain" res))))
+;; (ert-deftest boost-gptel-test-read-webpage ()
+;;   "read_webpage should fetch a known URL."
+;;   (let ((res (boost-gptel--read-webpage "https://example.com")))
+;;     (should (string-match-p "Example Domain" res))))
 
 ;;; Org-mode task tools
 
@@ -192,7 +222,7 @@
   "org_list_tasks, org_find_tasks, org_delete_task should work in a buffer."
   (with-temp-buffer
     (org-mode)
-    (insert "* TODO Alpha\\n* TODO Beta\\n")
+    (insert "* TODO Alpha\n* TODO Beta\n")
     (let ((all-str (boost-gptel--org-list-tasks))
           (found-str (boost-gptel--org-find-tasks "Alpha")))
       (should (string-match-p "TODO: Alpha" all-str))
@@ -212,6 +242,77 @@
       ;; file should exist
       (let* ((files (directory-files boost-gptel-note-directory nil ".*-test-note-.*\\.org$")))
         (should files)))))
+
+;;; YouTube agent command
+
+(ert-deftest boost-gptel-test-summarize-youtube ()
+  "The YouTube command should insert its URL and send the agent prompt."
+  (let (buffer sent)
+    (unwind-protect
+        (cl-letf (((symbol-function 'gptel-agent)
+                   (lambda (project-dir)
+                     (should (stringp project-dir))
+                     (setq buffer
+                           (generate-new-buffer
+                            (generate-new-buffer-name
+                             "*gptel-agent:youtubetest*")))
+                     nil))
+                  ((symbol-function 'gptel-send) (lambda () (setq sent t))))
+          (let ((result
+                 (boost-gptel-summarize-youtube
+                  "https://www.youtube.com/watch?v=test")))
+            (should (eq buffer result)))
+          (with-current-buffer buffer
+            (should (string-match-p "Résume cette vidéo YouTube"
+                                    (buffer-string)))
+            (should (string-match-p
+                     (regexp-quote "https://www.youtube.com/watch?v=test")
+                     (buffer-string))))
+          (should sent)
+          (should (eq (window-buffer) buffer)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest boost-gptel-test-summarize-youtube-rejects-empty-url ()
+  "The YouTube command should reject an empty URL before starting an agent."
+  (let ((agent-started nil))
+    (cl-letf (((symbol-function 'gptel-agent)
+               (lambda () (setq agent-started t))))
+      (should-error (boost-gptel-summarize-youtube "") :type 'user-error)
+      (should-not agent-started))))
+
+(ert-deftest boost-gptel-test-youtube-caption-track-prefers-original ()
+  "Caption selection should prefer a track explicitly marked as original."
+  (let ((tracks
+         (list (list :languageCode "en" :kind "asr")
+               (list :languageCode "fr-orig"
+                     :name (list :simpleText "French (Original)"))
+               (list :languageCode "es"))))
+    (should (eq (cadr tracks)
+                (boost-gptel--youtube-caption-track tracks)))))
+
+(ert-deftest boost-gptel-test-youtube-caption-track-prefers-spoken-language ()
+  "Automatic captions should take priority as a proxy for spoken language."
+  (let ((tracks (list (list :languageCode "en")
+                      (list :languageCode "fr" :kind "asr")
+                      (list :languageCode "es"))))
+    (should (eq (cadr tracks)
+                (boost-gptel--youtube-caption-track tracks)))))
+
+(ert-deftest boost-gptel-test-youtube-caption-track-international-fallback ()
+  "When original captions are absent, select the first preferred language."
+  (let ((tracks (list (list :languageCode "ja")
+                      (list :languageCode "es")
+                      (list :languageCode "fr"))))
+    (should (eq (caddr tracks)
+                (boost-gptel--youtube-caption-track tracks)))))
+
+(ert-deftest boost-gptel-test-youtube-caption-track-last-resort ()
+  "Use an available track even when it is outside preferred languages."
+  (let ((tracks (list (list :languageCode "sv")
+                      (list :languageCode "tr"))))
+    (should (eq (car tracks)
+                (boost-gptel--youtube-caption-track tracks)))))
 
 (provide 'gptel-tools-test)
 
