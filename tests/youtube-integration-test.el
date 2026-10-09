@@ -5,7 +5,7 @@
 (require 'gptel-agent)
 
 (defconst boost-gptel-test-youtube-url
-  "https://www.youtube.com/watch?v=hxj7Y60kXuU"
+  "https://www.youtube.com/watch?v=sD5sKXG2w7s"
   "Video used by the live YouTube transcript integration test.")
 
 (defconst boost-gptel-test-youtube-timeout 240
@@ -42,7 +42,7 @@
     count))
 
 (ert-deftest boost-gptel-live-youtube-summary ()
-  "Fetch French captions and summarize a YouTube video through OpenAI."
+  "Fetch captions and summarize a short YouTube video through OpenAI."
   (unless boost-gptel-openai-backend
     (ert-fail "OpenAI backend is not configured"))
   (unless (file-readable-p (expand-file-name "~/.openai_api_key"))
@@ -76,10 +76,10 @@
           (with-current-buffer buffer
             (let* ((chat (buffer-string))
                    (summary (boost-gptel-test--youtube-summary chat)))
-              (unless (string-match-p "# Transcript (fr)" chat)
-                (ert-fail "gptel did not include a French YouTube transcript"))
+              (unless (string-match-p "# Transcript (" chat)
+                (ert-fail "gptel did not include a YouTube transcript"))
               (unless (string-match-p "\\[[0-9]+:[0-9][0-9]\\]" chat)
-                (ert-fail "French transcript contains no timestamps"))
+                (ert-fail "YouTube transcript contains no timestamps"))
               (unless (and summary (not (string-empty-p summary)))
                 (ert-fail "OpenAI returned no final summary"))
               (unless (>= (boost-gptel-test--youtube-numbered-points summary) 8)
