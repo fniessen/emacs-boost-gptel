@@ -15,12 +15,18 @@
 (require 'hl-line)
 
 (require 'package)
-(package-initialize)
+(unless package--initialized
+  (package-initialize))
 
 (unless (require 'gptel nil 'noerror)
   (error "GPTel is required by emacs-boost-gptel"))
 
 (require 'gptel-context)
+
+(declare-function gptel-make-openai "gptel-openai")
+(declare-function gptel-make-anthropic "gptel-anthropic")
+(declare-function gptel-menu "gptel")
+(declare-function gptel-rewrite "gptel-rewrite")
 
 (defgroup boost-gptel nil
   "Personal configuration layered on top of GPTel."
@@ -423,7 +429,8 @@ symbolic links are resolved."
   (when (file-name-absolute-p relative-path)
     (user-error "Expected a path relative to the current project"))
   (let* ((root (or (boost-gptel--project-root)
-                   (user-error "No current project")))
+                   (file-name-as-directory
+                    (expand-file-name default-directory))))
          (candidate (expand-file-name relative-path root)))
     (unless (file-exists-p candidate)
       (user-error "Project file does not exist: %s" relative-path))
@@ -435,6 +442,26 @@ symbolic links are resolved."
         (user-error "Refusing to read a sensitive project path: %s"
                     relative-path))
       true-file)))
+
+(defun boost-gptel--safe-project-destination (relative-path)
+  "Return a new project path for RELATIVE-PATH without following escapes."
+  (when (file-name-absolute-p relative-path)
+    (user-error "Expected a path relative to the current project"))
+  (let* ((root (or (boost-gptel--project-root)
+                   (file-name-as-directory
+                    (expand-file-name default-directory))))
+         (candidate (expand-file-name relative-path root))
+         (parent (file-name-directory candidate)))
+    (while (and parent (not (file-directory-p parent)))
+      (setq parent (file-name-directory (directory-file-name parent))))
+    (unless (and parent
+                 (file-in-directory-p (file-truename parent)
+                                      (file-truename root)))
+      (user-error "Path escapes the current project: %s" relative-path))
+    (when (boost-gptel--sensitive-file-p candidate)
+      (user-error "Refusing to write a sensitive project path: %s"
+                  relative-path))
+    candidate))
 
 (defun boost-gptel--truncate-string (text limit)
   "Return TEXT truncated to LIMIT characters with a clear marker."
@@ -494,6 +521,89 @@ NAME is read from NAME.txt.  Return FALLBACK when the file is absent."
     (setq slug (replace-regexp-in-string "[^[:alnum:]]+" "-" slug))
     (setq slug (replace-regexp-in-string "^-+\\|-+$" "" slug))
     (if (string-empty-p slug) "note" slug)))
+
+(defun boost-gptel--project-files ()
+  "Return readable, non-sensitive project files as relative paths."
+  (let ((root (or (boost-gptel--project-root)
+                  (user-error "No current project")))
+        (files nil)
+        (inspected 0))
+    (dolist (file (directory-files-recursively root "^[^.].*" t))
+      (when (and (< inspected boost-gptel-tool-max-search-files)
+                 (file-regular-p file)
+                 (not (boost-gptel--sensitive-file-p file)))
+        (cl-incf inspected)
+        (push (file-relative-name file root) files)))
+    (sort files #'string<)))
+
+(defun boost-gptel--list-project-files ()
+  "Return a bounded list of readable project files as relative paths."
+  (prin1-to-string (boost-gptel--project-files)))
+
+(defun boost-gptel--read-project-file (relative-path)
+  "Read RELATIVE-PATH from the current project with standard safety guards."
+  (boost-gptel--read-file-limited
+   (boost-gptel--safe-project-file relative-path)))
+
+(defun boost-gptel--search-project-files (pattern)
+  "Search readable project files for regexp PATTERN.
+
+Return matches as relative-path:line-number:line-text records, bounded by the
+configured file and match limits."
+  (condition-case err
+      (progn
+        (string-match-p pattern "")
+        (let ((root (or (boost-gptel--project-root)
+                        (user-error "No current project")))
+              (matches nil)
+              (inspected 0))
+          (dolist (file (boost-gptel--project-files))
+            (when (< (length matches) boost-gptel-tool-max-search-matches)
+              (cl-incf inspected)
+              (condition-case nil
+                  (with-temp-buffer
+                    (insert-file-contents
+                     (expand-file-name file root) nil 0
+                     (* 4 boost-gptel-tool-max-output-chars))
+                    (unless (save-excursion
+                              (goto-char (point-min))
+                              (search-forward "\0" nil t))
+                      (goto-char (point-min))
+                      (let ((line-number 1))
+                        (while (and (< (length matches)
+                                       boost-gptel-tool-max-search-matches)
+                                      (not (eobp)))
+                          (let ((line (buffer-substring-no-properties
+                                       (line-beginning-position)
+                                       (line-end-position))))
+                            (when (string-match-p pattern line)
+                              (push (format "%s:%d: %s"
+                                            file line-number line)
+                                    matches)))
+                          (cl-incf line-number)
+                          (forward-line 1)))))
+                (error nil))))
+          (prin1-to-string
+           (list :files-inspected inspected
+                 :matches (nreverse matches)))))
+    (invalid-regexp
+     (user-error "Invalid search pattern: %s" (error-message-string err)))))
+
+(defun boost-gptel--symbol-exists (symbol-name)
+  "Return whether SYMBOL-NAME names a bound variable or function."
+  (let ((symbol (intern-soft symbol-name)))
+    (if (and symbol (or (boundp symbol) (fboundp symbol))) "true" "false")))
+
+(defun boost-gptel--function-documentation (function-name)
+  "Return the documentation for FUNCTION-NAME, or an explicit absence marker."
+  (let ((symbol (intern-soft function-name)))
+    (cond
+     ((not (and symbol (fboundp symbol)))
+      (user-error "Not a defined function: %s" function-name))
+     ((documentation symbol t)
+      (documentation symbol t))
+     (t
+      "No documentation is available."))))
 
 (defun boost-gptel--emacs-version ()
   "Return the current Emacs version string."
@@ -687,6 +797,32 @@ and return its printed result or an error message."
 
 (add-to-list 'gptel-tools boost-gptel-tool-current-datetime)
 
+(defvar boost-gptel-tool-symbol-exists
+  (gptel-make-tool
+   :name "symbol_exists"
+   :description "Return whether an Emacs Lisp symbol names a bound variable or function."
+   :function #'boost-gptel--symbol-exists
+   :args (list '(:name "symbol_name" :type string
+                 :description "Emacs Lisp symbol name"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-symbol-exists)
+
+(defvar boost-gptel-tool-function-documentation
+  (gptel-make-tool
+   :name "function_documentation"
+   :description "Return the documentation string for a defined Emacs Lisp function."
+   :function #'boost-gptel--function-documentation
+   :args (list '(:name "function_name" :type string
+                 :description "Emacs Lisp function name"))
+   :category "Emacs Runtime"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-function-documentation)
+
 (defun boost-gptel--read-buffer (buffer-name)
   "Return BUFFER-NAME contents, truncated to the configured limit."
   (let ((buffer (get-buffer buffer-name)))
@@ -718,17 +854,50 @@ Sensitive buffers are rejected and long results are truncated."
 
 (add-to-list 'gptel-tools boost-gptel-tool-read-buffer)
 
+(defvar boost-gptel-tool-list-project-files
+  (gptel-make-tool
+   :name "list_project_files"
+   :description "List bounded, readable, non-sensitive files in the current project."
+   :function #'boost-gptel--list-project-files
+   :args nil
+   :category "Project"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-list-project-files)
+
+(defvar boost-gptel-tool-search-project-files
+  (gptel-make-tool
+   :name "search_project_files"
+   :description "Search bounded, readable, non-sensitive project files with a regexp."
+   :function #'boost-gptel--search-project-files
+   :args (list '(:name "pattern" :type string
+                 :description "Regexp to search for in project files"))
+   :category "Project"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-search-project-files)
+
+(defvar boost-gptel-tool-read-project-file
+  (gptel-make-tool
+   :name "read_project_file"
+   :description "Read a bounded text file relative to the current project."
+   :function #'boost-gptel--read-project-file
+   :args (list '(:name "relative_path" :type string
+                 :description "Path relative to the current project root"))
+   :category "Project"
+   :confirm nil
+   :include t))
+
+(add-to-list 'gptel-tools boost-gptel-tool-read-project-file)
+
 (defun boost-gptel--rename-file (old-path new-path)
   "Rename file OLD-PATH to NEW-PATH under the project root, creating directories
 if needed."
   (condition-case err
-      (let* (;; choose project root or fallback
-             (root (if (and (fboundp 'project-current)
-                            (project-current))
-                       (project-root (project-current))
-                     default-directory))
-             (old (expand-file-name old-path root))
-             (new (expand-file-name new-path root))
+      (let* ((old (boost-gptel--safe-project-file old-path))
+             (new (boost-gptel--safe-project-destination new-path))
              (new-dir (file-name-directory new)))
         (unless (file-directory-p new-dir)
           (make-directory new-dir t))
@@ -757,13 +926,7 @@ if needed."
 (defun boost-gptel--delete-file (file-path)
   "Delete the file at FILE-PATH under the project root."
   (condition-case err
-      (let* ((proj-root (if (and (fboundp 'project-current)
-                                 (project-current))
-                            (project-root (project-current))
-                          default-directory))
-             (abs (expand-file-name file-path proj-root)))
-        (unless (file-exists-p abs)
-          (error "File does not exist: %s" file-path))
+      (let ((abs (boost-gptel--safe-project-file file-path)))
         (delete-file abs)
         (format "Deleted file: %s" abs))
     (error
@@ -808,22 +971,6 @@ if needed."
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-list-tasks)
-
-(defun boost-gptel--org-find-tasks (pattern)
-  "Return a printed list of TODO headings in the current Org buffer whose titles match PATTERN."
-  (require 'org)
-  (let (matches)
-    (org-element-map (org-element-parse-buffer) 'headline
-      (lambda (hl)
-        (when (and (org-element-property :todo-keyword hl)
-                   (string-match-p pattern
-                                   (org-element-property :raw-value hl)))
-          (push
-           (format "%s: %s"
-                   (org-element-property :todo-keyword hl)
-                   (org-element-property :raw-value hl))
-           matches))))
-    (prin1-to-string (nreverse matches))))
 
 (defun boost-gptel--org-find-tasks (pattern)
   "Return a printed list of TODO headings whose title matches PATTERN."
@@ -896,13 +1043,15 @@ if needed."
             :type string
             :description "Complete Org-formatted note content"))
    :category "Org-mode"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-create-note)
 
 (defun boost-gptel--org-delete-task (pattern)
-  "Delete the first TODO heading in the current Org buffer whose title matches PATTERN."
+  "Delete the first matching TODO heading in the current Org buffer.
+
+PATTERN is a regular expression matched against the heading title."
   (require 'org)
   (save-excursion
     (goto-char (point-min))
@@ -928,12 +1077,115 @@ if needed."
             :type string
             :description "Regexp to match task title"))
    :category "Org-mode"
-   :confirm nil
+   :confirm t
    :include t))
 
 (add-to-list 'gptel-tools boost-gptel-tool-org-delete-task)
 
 (require 'gptel-agent nil 'noerror)
+
+(defconst boost-gptel-youtube-caption-languages
+  '("en" "fr" "es" "pt" "de" "it" "nl" "ru" "zh" "ja" "ar" "hi")
+  "Preferred international languages when a YouTube original track is absent.")
+
+(defun boost-gptel--youtube-caption-original-p (track)
+  "Return non-nil when YouTube marks TRACK as an original-language caption."
+  (let ((language (or (plist-get track :languageCode) ""))
+        (name (or (plist-get (plist-get track :name) :simpleText) "")))
+    (or (string-match-p "-orig\\'" language)
+        (string-match-p "\\boriginal\\b" (downcase name)))))
+
+(defun boost-gptel--youtube-caption-language (track)
+  "Return the language code for caption TRACK."
+  (or (plist-get track :languageCode) "unknown"))
+
+(defun boost-gptel--youtube-caption-track (tracks)
+  "Select the best available caption track from YouTube TRACKS."
+  (or (seq-find #'boost-gptel--youtube-caption-original-p tracks)
+      ;; YouTube marks automatic captions with `asr'; they follow the
+      ;; spoken language even when no explicit original marker is present.
+      (seq-find (lambda (track) (equal (plist-get track :kind) "asr"))
+                tracks)
+      (cl-loop
+       for language in boost-gptel-youtube-caption-languages
+       thereis
+       (seq-find
+        (lambda (track)
+          (string-match-p
+           (concat "\\`" (regexp-quote language) "\\(?:-\\|\\'\\)")
+           (boost-gptel--youtube-caption-language track)))
+        tracks))
+      (car tracks)))
+
+(defun boost-gptel--youtube-fetch-captions (_original callback description tracks)
+  "Fetch a suitable caption track from TRACKS and call CALLBACK with it.
+DESCRIPTION is the YouTube video description.  _ORIGINAL is the function
+replaced by this advice."
+  (let ((track (boost-gptel--youtube-caption-track tracks)))
+    (if (not track)
+        (funcall callback
+                 (format "# Description\n\n%s\n\n# Transcript\n\nNo transcript available in any language."
+                         (or description "No description available.")))
+      (let ((base-url (replace-regexp-in-string
+                       "&fmt=srv3" ""
+                       (plist-get track :baseUrl)))
+            (language (boost-gptel--youtube-caption-language track)))
+        (url-retrieve
+         base-url
+         (lambda (status callback description language)
+           (if-let* ((error (plist-get status :error)))
+               (funcall callback
+                        (format "# Description\n\n%s\n\n# Transcript (%s)\n\nError fetching transcript: %s"
+                                (or description "No description available.")
+                                language error))
+             (goto-char (point-min))
+             (search-forward "\n\n" nil t)
+             (let* ((xml-string (buffer-substring (point) (point-max)))
+                    (caption-dom (gptel-agent--yt-parse-captions xml-string))
+                    (transcript
+                     (gptel-agent--yt-format-captions caption-dom 30)))
+               (funcall callback
+                        (format "# Description\n\n%s\n\n# Transcript (%s)\n\n%s"
+                                (or description "No description available.")
+                                language
+                                (or transcript "Error parsing transcript."))))))
+         (list callback description language))))))
+
+(when (fboundp 'gptel-agent--yt-fetch-captions)
+  (advice-add 'gptel-agent--yt-fetch-captions
+              :around #'boost-gptel--youtube-fetch-captions))
+
+(defun boost-gptel-summarize-youtube (url)
+  "Start a GPTel agent to summarize the YouTube video at URL."
+  (interactive "sYouTube URL: ")
+  (unless (and (stringp url) (not (string-empty-p url)))
+    (user-error "YouTube URL must not be empty"))
+  (unless (fboundp 'gptel-agent)
+    (user-error "Install and load gptel-agent before using this command"))
+  (let* ((buffers-before (buffer-list))
+         (agent-result (gptel-agent default-directory))
+         (buffer
+          (or (and (buffer-live-p agent-result) agent-result)
+              (seq-find
+               (lambda (candidate)
+                 (and (not (memq candidate buffers-before))
+                      (string-prefix-p "*gptel-agent:"
+                                       (buffer-name candidate))))
+               (buffer-list)))))
+    (unless (buffer-live-p buffer)
+      (error "gptel-agent did not create a live agent buffer"))
+    (pop-to-buffer buffer)
+    (with-current-buffer buffer
+      (goto-char (point-max))
+      (unless (bolp)
+        (insert "\n"))
+      (insert
+       (format
+        (concat "Résume cette vidéo YouTube en français en 8 points, "
+                "avec les idées principales et les timestamps utiles.\nURL : %s\n")
+        url))
+      (gptel-send))
+    buffer))
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."
@@ -1146,7 +1398,7 @@ Update the buffer-local `gptel-context' variable with the retained items."
 
 (defface boost-gptel-assistant-face
   '((t
-     :background "#4A90E2"
+     :background "#79B6DE"
      :foreground "#FFFFFF"
      :box (:line-width 1 :color "#000000")
      :weight bold))
@@ -1622,7 +1874,7 @@ Do nothing when the GPTel response belongs to another buffer."
   "S" #'boost-gptel-summarize-buffer
   "t" #'boost-gptel-translate-region)
 
-(global-set-key (kbd "C-c g") #'boost-gptel-prefix-map)
+(global-set-key (kbd "C-c g") boost-gptel-prefix-map)
 
 (defcustom boost-gptel-enable-mcp-integration nil
   "Whether to load GPTel's optional MCP integration library."
