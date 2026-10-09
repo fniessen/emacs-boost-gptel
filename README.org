@@ -1816,15 +1816,17 @@ Signal an error if the request fails or exceeds
         (kill-buffer buffer)))))
 #+end_src
 
-For a non-interactive launch, use batch mode. The command waits for the final
-response, writes only the summary to stdout, and exits when finished:
+The =bin/gptel-youtube-summary= command runs Emacs in batch mode, waits for the
+final response, writes only the summary to stdout, and exits when finished.
+Make it available on your shell =PATH=:
 
 #+begin_src shell :tangle no
-URL='https://www.youtube.com/watch?v=ID_VIDEO' emacs --batch -L lisp --eval \
-  '(progn
-     (require (quote emacs-boost-gptel))
-     (boost-gptel-summarize-youtube-to-stdout (getenv "URL")))'
+gptel-youtube-summary 'https://www.youtube.com/watch?v=ID_VIDEO'
 #+end_src
+
+The command uses the packages installed in your Emacs package directory and the
+OpenAI key configured by this package (by default =~/.openai_api_key=). Set =EMACS=
+to use a different Emacs executable.
 
 =gptel-agent.el= scans =./agents/= and a list of =skills/= directories for
 Markdown/Org agent definitions, assembles the system prompt, creates the
