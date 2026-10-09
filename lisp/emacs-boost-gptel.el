@@ -1156,7 +1156,7 @@ replaced by this advice."
               :around #'boost-gptel--youtube-fetch-captions))
 
 (defun boost-gptel-summarize-youtube (url)
-  "Start a GPTel agent to summarize the YouTube video at URL."
+  "Start a GPTel agent to summarize the YouTube video at URL in its original language."
   (interactive "sYouTube URL: ")
   (unless (and (stringp url) (not (string-empty-p url)))
     (user-error "YouTube URL must not be empty"))
@@ -1181,8 +1181,9 @@ replaced by this advice."
         (insert "\n"))
       (insert
        (format
-        (concat "Résume cette vidéo YouTube en français en 8 points, "
-                "avec les idées principales et les timestamps utiles.\nURL : %s\n")
+        (concat "Summarize this YouTube video in its original language in 8 points,"
+                "with the main ideas, important arguments, practical takeaways,"
+                "and useful timestamps.\nURL : %s\n")
         url))
       (gptel-send))
     buffer))
