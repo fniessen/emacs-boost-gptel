@@ -1155,9 +1155,13 @@ replaced by this advice."
   (advice-add 'gptel-agent--yt-fetch-captions
               :around #'boost-gptel--youtube-fetch-captions))
 
-(defun boost-gptel-summarize-youtube (url)
-  "Start a GPTel agent to summarize the YouTube video at URL in its original language."
-  (interactive "sYouTube URL: ")
+(defconst boost-gptel-youtube-timeout 240
+  "Maximum seconds to wait for a YouTube summary.")
+
+(defun boost-gptel--start-youtube-summary
+    (url &optional post-response-function display)
+  "Start an agent to summarize YouTube URL.
+Install POST-RESPONSE-FUNCTION locally before sending the prompt."
   (unless (and (stringp url) (not (string-empty-p url)))
     (user-error "YouTube URL must not be empty"))
   (unless (fboundp 'gptel-agent)
@@ -1174,19 +1178,60 @@ replaced by this advice."
                (buffer-list)))))
     (unless (buffer-live-p buffer)
       (error "gptel-agent did not create a live agent buffer"))
-    (pop-to-buffer buffer)
     (with-current-buffer buffer
       (goto-char (point-max))
       (unless (bolp)
         (insert "\n"))
       (insert
        (format
-        (concat "Summarize this YouTube video in its original language in 8 points,"
-                "with the main ideas, important arguments, practical takeaways,"
-                "and useful timestamps.\nURL : %s\n")
+        (concat "Summarize this YouTube video in its original language in 8 points, "
+                "with the main ideas, important arguments, practical takeaways, "
+                "and useful timestamps.\nURL: %s\n")
         url))
+      (when post-response-function
+        (add-hook 'gptel-post-response-functions post-response-function nil t))
+      (when display
+        (pop-to-buffer buffer))
       (gptel-send))
     buffer))
+
+(defun boost-gptel-summarize-youtube (url)
+  "Start a GPTel agent to summarize the YouTube video at URL."
+  (interactive "sYouTube URL: ")
+  (boost-gptel--start-youtube-summary url nil t))
+
+(defun boost-gptel-summarize-youtube-to-stdout (url)
+  "Summarize YouTube URL, print the result to stdout, and wait for completion.
+Signal an error if the request fails or exceeds
+`boost-gptel-youtube-timeout'."
+  (let* ((completed nil)
+         (response nil)
+         (post-response-function
+          (lambda (begin end)
+            (setq response (buffer-substring-no-properties begin end)
+                  completed t)))
+         buffer)
+    (setq buffer
+          (boost-gptel--start-youtube-summary
+           url post-response-function))
+    (unwind-protect
+        (let ((deadline (+ (float-time) boost-gptel-youtube-timeout)))
+          (while (and (not completed)
+                      (< (float-time) deadline))
+            (accept-process-output nil 1))
+          (unless completed
+            (gptel-abort buffer)
+            (error "YouTube summary timed out after %d seconds"
+                   boost-gptel-youtube-timeout))
+          (unless (and (stringp response)
+                       (not (string-empty-p (string-trim response))))
+            (error
+             "GPTel returned no summary (request failed or response was empty)"))
+          (princ (string-trim-right response))
+          (princ "\n")
+          response)
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
 
 (defun boost-gptel--post-tool-log (call)
   "Log completion of a GPTel tool CALL without logging sensitive contents."

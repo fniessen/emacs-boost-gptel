@@ -263,13 +263,42 @@
                   "https://www.youtube.com/watch?v=test")))
             (should (eq buffer result)))
           (with-current-buffer buffer
-            (should (string-match-p "Résume cette vidéo YouTube"
+            (should (string-match-p "Summarize this YouTube video"
+                                    (buffer-string)))
+            (should (string-match-p "in its original language"
                                     (buffer-string)))
             (should (string-match-p
                      (regexp-quote "https://www.youtube.com/watch?v=test")
                      (buffer-string))))
           (should sent)
           (should (eq (window-buffer) buffer)))
+      (when (buffer-live-p buffer)
+        (kill-buffer buffer)))))
+
+(ert-deftest boost-gptel-test-summarize-youtube-to-stdout ()
+  "The batch YouTube command should print its final response to stdout."
+  (let (buffer post-response-function waited)
+    (unwind-protect
+        (cl-letf (((symbol-function 'boost-gptel--start-youtube-summary)
+                   (lambda (_url hook)
+                     (setq buffer (generate-new-buffer " *youtube-cli-test*"))
+                     (with-current-buffer buffer
+                       (insert "Summary in the video's original language."))
+                     (setq post-response-function hook)
+                     buffer))
+                  ((symbol-function 'accept-process-output)
+                   (lambda (&rest _)
+                     (setq waited t)
+                     (with-current-buffer buffer
+                       (funcall post-response-function
+                                (point-min) (point-max))))))
+          (with-temp-buffer
+            (let ((standard-output (current-buffer)))
+              (boost-gptel-summarize-youtube-to-stdout
+               "https://www.youtube.com/watch?v=test"))
+            (should (equal "Summary in the video's original language.\n"
+                           (buffer-string)))
+            (should waited)))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
 

@@ -8,7 +8,7 @@
   "https://www.youtube.com/watch?v=sD5sKXG2w7s"
   "Video used by the live YouTube transcript integration test.")
 
-(defconst boost-gptel-test-youtube-timeout 240
+(defconst boost-gptel-test-youtube-timeout boost-gptel-youtube-timeout
   "Maximum seconds to wait for the live YouTube summary request.")
 
 (defun boost-gptel-test--youtube-response-complete-p ()
