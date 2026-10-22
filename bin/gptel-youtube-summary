@@ -1,0 +1,42 @@
+#!/bin/sh
+
+set -eu
+
+usage() {
+    printf 'Usage: gptel-youtube-summary <YouTube-URL>\n' >&2
+}
+
+if [ "$#" -ne 1 ]; then
+    usage
+    exit 2
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+esac
+
+emacs_command=${EMACS:-emacs}
+if ! command -v "$emacs_command" >/dev/null 2>&1; then
+    printf 'gptel-youtube-summary: Emacs executable not found: %s\n' \
+        "$emacs_command" >&2
+    exit 127
+fi
+
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+BOOST_GPTEL_DIR=$script_dir
+BOOST_GPTEL_YOUTUBE_URL=$1
+export BOOST_GPTEL_DIR BOOST_GPTEL_YOUTUBE_URL
+
+exec "$emacs_command" --batch -Q --eval "
+(progn
+  (require 'package)
+  (package-initialize)
+  (add-to-list
+   (quote load-path)
+   (expand-file-name \"lisp\" (getenv \"BOOST_GPTEL_DIR\")))
+  (require (quote emacs-boost-gptel))
+  (boost-gptel-summarize-youtube-to-stdout
+   (getenv \"BOOST_GPTEL_YOUTUBE_URL\")))"
