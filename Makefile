@@ -12,7 +12,8 @@ TEST_FILES = tests/gptel-tools-test.el tests/agent-todo-test.el \
 	tests/youtube-integration-test.el
 TEST_LOAD_ARGS = $(foreach file,$(TEST_FILES),-l $(file))
 
-.PHONY: all check tangle test compile clean
+.DEFAULT_GOAL := help
+.PHONY: help all lint-shell check tangle test compile clean
 
 # Show this help.
 help:
@@ -33,7 +34,15 @@ help:
 	{ description = "" }' [Mm]akefile
 
 # Run the complete validation workflow.
-all: check
+all: lint-shell check
+
+# Run ShellCheck on shell scripts in the repository.
+lint-shell:
+	@command -v shellcheck >/dev/null || { printf 'ShellCheck is required.\n' >&2; exit 127; }
+	@find . -type f -not -path './.git/*' \
+		\( -perm /111 -o -name '*.sh' -o -name '*.bash' \) -print0 \
+		| xargs -0 -r grep -IlZ -m1 -E '^#!.*(bash|/sh|/dash|/ksh)([[:space:]]|$$)' \
+		| xargs -0 -r shellcheck
 
 # Tangle, test, and byte-compile the project.
 check: tangle test compile
