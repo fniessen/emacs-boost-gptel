@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 set -eu
 
@@ -35,8 +35,8 @@ exec "$emacs_command" --batch -Q --eval "
   (require 'package)
   (package-initialize)
   (add-to-list
-   (quote load-path)
+   'load-path
    (expand-file-name \"lisp\" (getenv \"BOOST_GPTEL_DIR\")))
-  (require (quote emacs-boost-gptel))
+  (require 'emacs-boost-gptel)
   (boost-gptel-summarize-youtube-to-stdout
    (getenv \"BOOST_GPTEL_YOUTUBE_URL\")))"
