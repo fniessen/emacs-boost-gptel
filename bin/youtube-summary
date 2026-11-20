@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -eu
 
@@ -6,7 +6,7 @@ usage() {
     printf 'Usage: gptel-youtube-summary <YouTube-URL>\n' >&2
 }
 
-if [ "$#" -ne 1 ]; then
+if [[ "$#" -ne 1 ]]; then
     usage
     exit 2
 fi
