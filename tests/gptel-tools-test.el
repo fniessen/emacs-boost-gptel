@@ -277,11 +277,14 @@
 
 (ert-deftest boost-gptel-test-summarize-youtube-to-stdout ()
   "The batch YouTube command should print its final response to stdout."
-  (let (buffer post-response-function waited)
+  (let (buffer post-response-function waited passed-transcript)
     (unwind-protect
-        (cl-letf (((symbol-function 'boost-gptel--start-youtube-summary)
-                   (lambda (_url hook)
-                     (setq buffer (generate-new-buffer " *youtube-cli-test*"))
+        (cl-letf (((symbol-function 'boost-gptel--youtube-transcript)
+                   (lambda (_url) "[0:00] Transcript text."))
+                  ((symbol-function 'boost-gptel--start-youtube-summary)
+                   (lambda (_url hook _display transcript)
+                     (setq buffer (generate-new-buffer " *youtube-cli-test*")
+                           passed-transcript transcript)
                      (with-current-buffer buffer
                        (insert "Summary in the video's original language."))
                      (setq post-response-function hook)
@@ -298,9 +301,38 @@
                "https://www.youtube.com/watch?v=test"))
             (should (equal "Summary in the video's original language.\n"
                            (buffer-string)))
+            (should (equal "[0:00] Transcript text." passed-transcript))
             (should waited)))
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))))
+
+(ert-deftest boost-gptel-test-youtube-transcript-without-llm ()
+  "Transcript retrieval should return captions without starting an agent."
+  (cl-letf (((symbol-function 'gptel-agent)
+             (lambda (&rest _) (error "Transcript retrieval called an LLM")))
+            ((symbol-function 'gptel-agent--yt-video-id)
+             (lambda (_url) "video-id"))
+            ((symbol-function 'gptel-agent--yt-fetch-watch-page)
+             (lambda (callback video-id)
+               (should (equal "video-id" video-id))
+               (funcall callback
+                        "# Description\n\nVideo description.\n\n# Transcript (fr)\n\n[0:00] Bonjour."))))
+    (should
+     (equal "[0:00] Bonjour."
+            (boost-gptel--youtube-transcript
+             "https://www.youtube.com/watch?v=video-id")))))
+
+(ert-deftest boost-gptel-test-youtube-transcript-errors-without-captions ()
+  "Transcript retrieval should fail explicitly when no caption track exists."
+  (cl-letf (((symbol-function 'gptel-agent--yt-video-id)
+             (lambda (_url) "video-id"))
+            ((symbol-function 'gptel-agent--yt-fetch-watch-page)
+             (lambda (callback _video-id)
+               (funcall callback
+                        "# Description\n\nVideo description.\n\n# Transcript\n\nNo transcript available in any language."))))
+    (should-error
+     (boost-gptel--youtube-transcript
+      "https://www.youtube.com/watch?v=video-id"))))
 
 (ert-deftest boost-gptel-test-summarize-youtube-rejects-empty-url ()
   "The YouTube command should reject an empty URL before starting an agent."

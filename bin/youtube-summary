@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-    printf 'Usage: gptel-youtube-summary <YouTube-URL>\n' >&2
+    printf 'Usage: youtube-summary <YouTube-URL>\n' >&2
 }
 
 if [[ "$#" -ne 1 ]]; then
@@ -20,23 +20,32 @@ esac
 
 emacs_command=${EMACS:-emacs}
 if ! command -v "$emacs_command" >/dev/null 2>&1; then
-    printf 'gptel-youtube-summary: Emacs executable not found: %s\n' \
+    printf 'youtube-summary: Emacs executable not found: %s\n' \
         "$emacs_command" >&2
     exit 127
 fi
 
-script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+bin_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$bin_dir/.." && pwd)
+transcript_file=$(mktemp)
+trap 'rm -f -- "$transcript_file"' EXIT
+"$bin_dir/youtube-transcript" "$1" >"$transcript_file"
 BOOST_GPTEL_DIR=$script_dir
 BOOST_GPTEL_YOUTUBE_URL=$1
-export BOOST_GPTEL_DIR BOOST_GPTEL_YOUTUBE_URL
+BOOST_GPTEL_YOUTUBE_TRANSCRIPT_FILE=$transcript_file
+export BOOST_GPTEL_DIR BOOST_GPTEL_YOUTUBE_URL BOOST_GPTEL_YOUTUBE_TRANSCRIPT_FILE
 
-exec "$emacs_command" --batch -Q --eval "
+"$emacs_command" --batch -Q --eval "
 (progn
+  (setq load-prefer-newer t)
   (require 'package)
   (package-initialize)
   (add-to-list
    'load-path
    (expand-file-name \"lisp\" (getenv \"BOOST_GPTEL_DIR\")))
   (require 'emacs-boost-gptel)
-  (boost-gptel-summarize-youtube-to-stdout
-   (getenv \"BOOST_GPTEL_YOUTUBE_URL\")))"
+  (with-temp-buffer
+    (insert-file-contents (getenv \"BOOST_GPTEL_YOUTUBE_TRANSCRIPT_FILE\"))
+    (boost-gptel-summarize-youtube-with-transcript-to-stdout
+     (getenv \"BOOST_GPTEL_YOUTUBE_URL\")
+     (buffer-string))))"

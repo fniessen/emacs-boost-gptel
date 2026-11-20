@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -eu
+
+usage() {
+    printf 'Usage: youtube-transcript <YouTube-URL>\n' >&2
+}
+
+if [[ "$#" -ne 1 ]]; then
+    usage
+    exit 2
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+esac
+
+emacs_command=${EMACS:-emacs}
+if ! command -v "$emacs_command" >/dev/null 2>&1; then
+    printf 'youtube-transcript: Emacs executable not found: %s\n' \
+        "$emacs_command" >&2
+    exit 127
+fi
+
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+BOOST_GPTEL_LISP_DIR=$script_dir/lisp
+BOOST_GPTEL_YOUTUBE_URL=$1
+export BOOST_GPTEL_LISP_DIR BOOST_GPTEL_YOUTUBE_URL
+
+exec "$emacs_command" --batch -Q --eval "
+(progn
+  (setq load-prefer-newer t)
+  (require 'package)
+  (package-initialize)
+  (add-to-list
+   'load-path
+   (getenv \"BOOST_GPTEL_LISP_DIR\"))
+  (require 'emacs-boost-gptel-youtube)
+  (boost-gptel-youtube-transcript-to-stdout
+   (getenv \"BOOST_GPTEL_YOUTUBE_URL\")))"
