@@ -1,0 +1,170 @@
+#+TITLE: Example Agent Task Board
+#+AUTHOR: emacs-boost-gptel contributors
+#+STARTUP: overview
+#+TODO: TODO NEXT BLOCKED | DONE CANCELED
+
+* How to use this example
+
+Each task gives an agent:
+
+- a concrete goal;
+- local context to inspect first;
+- constraints that must remain true;
+- acceptance criteria that can be checked independently.
+
+An agent should update the task state and add a short result note when the work
+is complete. Replace these examples with project-specific work items.
+
+* Agent task board
+
+** TODO Add a tool-registration consistency test
+:PROPERTIES:
+:ID:       agent-example-tool-registration
+:END:
+
+*** Goal
+
+Verify that every tool named by a GPTel preset is registered in
+=boost-gptel-tools= and that no preset names a missing tool.
+
+*** Start here
+
+- =README.org=, the preset definitions and tool registrations;
+- =lisp/emacs-boost-gptel.el=, the tangled implementation;
+- =tests/agent-todo-test.el=, the skipped test scaffold.
+
+*** Constraints
+
+- Do not make the test depend on API credentials.
+- Treat tool names as strings, matching GPTel preset behavior.
+- Keep the check independent of network access.
+
+*** Acceptance criteria
+
+- The test fails when a preset references an unregistered tool.
+- The test passes against the current configuration.
+- =make test= still completes with no unexpected failures.
+
+** TODO Test sensitive-buffer rejection
+:PROPERTIES:
+:ID:       agent-example-sensitive-buffer
+:END:
+
+*** Goal
+
+Add a regression test proving that =read_buffer= refuses buffers whose names
+or file paths match the configured sensitive-buffer or sensitive-file guards.
+
+*** Start here
+
+- =boost-gptel--sensitive-buffer-p=;
+- =boost-gptel--read-buffer=;
+- =boost-gptel-sensitive-buffer-regexp=;
+- =boost-gptel-sensitive-file-regexp=.
+
+*** Constraints
+
+- Use temporary buffers and files.
+- Do not read or create real credential files.
+- Assert an error rather than only checking a warning message.
+
+*** Acceptance criteria
+
+- A matching buffer name is rejected.
+- A buffer visiting a matching file path is rejected.
+- An ordinary temporary buffer remains readable.
+
+** TODO Add a bounded project-search test
+:PROPERTIES:
+:ID:       agent-example-project-search
+:END:
+
+*** Goal
+
+Test that =search_project_files= respects both the maximum number of inspected
+files and the maximum number of returned matches.
+
+*** Start here
+
+- =boost-gptel--search-project-files=;
+- =boost-gptel-tool-max-search-files=;
+- =boost-gptel-tool-max-search-matches=;
+- the existing temporary-project test helper.
+
+*** Constraints
+
+- Use a temporary project with a local =.git= directory.
+- Bind small limits dynamically inside the test.
+- Include a binary file and verify it is ignored rather than returned.
+
+*** Acceptance criteria
+
+- The result contains no more than the configured match limit.
+- The result reports or otherwise enforces the configured file limit.
+- Binary and sensitive files never produce matches.
+
+** TODO Document the write-tool safety model
+:PROPERTIES:
+:ID:       agent-example-write-safety-docs
+:END:
+
+*** Goal
+
+Document which tools mutate buffers or files, when GPTel asks for confirmation,
+and which path restrictions apply.
+
+*** Start here
+
+- the tool collection table in =README.org=;
+- =rename_file=, =delete_file=, =create_note=, and =org_delete_task=;
+- the path helper functions in the generated Lisp file.
+
+*** Constraints
+
+- Describe actual behavior, not intended future behavior.
+- Keep the documentation close to the existing tool documentation.
+- Do not include credentials, machine-local paths, or API keys.
+
+*** Acceptance criteria
+
+- Every mutating tool is listed.
+- Confirmation behavior is accurate.
+- The documentation states that sensitive-path matching is a guardrail, not a
+  complete secret detector.
+
+** TODO Improve the Makefile's developer workflow
+:PROPERTIES:
+:ID:       agent-example-makefile
+:END:
+
+*** Goal
+
+Add a convenient target for agents that runs all checks and reports skipped
+TODO tests separately from unexpected failures.
+
+*** Start here
+
+- =Makefile=;
+- =tests/agent-todo-test.el=;
+- the output of =make test=.
+
+*** Constraints
+
+- Preserve the existing =make test= and =make check= targets.
+- Do not hide test failures by ignoring the Emacs exit status.
+- Keep the target usable in a clean checkout with Emacs and GPTel installed.
+
+*** Acceptance criteria
+
+- The new target has a short comment explaining its purpose.
+- Unexpected ERT failures produce a nonzero exit status.
+- Intentional skipped TODO tests remain visible in the output.
+
+* Completed example
+
+** DONE Replace this heading with a real result
+CLOSED: [2026-09-25 Fri 11:20]
+
+This completed item demonstrates the expected shape of an agent result. A real
+agent should replace it with a concise note describing the files changed and
+the validation command that passed.
