@@ -15,7 +15,7 @@ TEST_LOAD_ARGS = $(foreach file,$(TEST_FILES),-l $(file))
 .DEFAULT_GOAL := help
 .PHONY: help all lint-shell check tangle test compile clean
 
-# Show this help.
+# Show available targets.
 help:
 	@printf '%s\n' "Usage: make TARGET" "" "Targets:"
 	@awk '\
