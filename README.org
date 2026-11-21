@@ -1894,16 +1894,16 @@ Signal an error if the request fails or exceeds
    url (boost-gptel--youtube-transcript url)))
 #+end_src
 
-The =bin/youtube-transcript= command fetches a transcript without using an LLM
+The =bin/yt-transcript= command fetches a transcript without using an LLM
 or loading this package's GPTel configuration.
 
-The =bin/youtube-summary= command uses that transcript as input to GPTel, waits
+The =bin/yt-summary= command uses that transcript as input to GPTel, waits
 for the final response, writes only the summary to stdout, and exits when
 finished. Make both commands available on your shell =PATH=:
 
 #+begin_src shell :tangle no
-youtube-transcript 'https://www.youtube.com/watch?v=ID_VIDEO'
-youtube-summary 'https://www.youtube.com/watch?v=ID_VIDEO'
+yt-transcript 'https://www.youtube.com/watch?v=ID_VIDEO'
+yt-summary 'https://www.youtube.com/watch?v=ID_VIDEO'
 #+end_src
 
 Both commands use the packages installed in your Emacs package directory. The

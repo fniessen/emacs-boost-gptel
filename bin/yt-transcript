@@ -3,7 +3,7 @@
 set -eu
 
 usage() {
-    printf 'Usage: youtube-transcript <YouTube-URL>\n' >&2
+    printf 'Usage: yt-transcript <YouTube-URL>\n' >&2
 }
 
 if [[ "$#" -ne 1 ]]; then
@@ -20,7 +20,7 @@ esac
 
 emacs_command=${EMACS:-emacs}
 if ! command -v "$emacs_command" >/dev/null 2>&1; then
-    printf 'youtube-transcript: Emacs executable not found: %s\n' \
+    printf 'yt-transcript: Emacs executable not found: %s\n' \
         "$emacs_command" >&2
     exit 127
 fi
